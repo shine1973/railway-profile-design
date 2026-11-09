@@ -1,0 +1,44 @@
+{
+  "name": "railway-profile-design",
+  "version": "0.1.0",
+  "description": "离线铁路纵断面拉坡设计",
+  "author": "shine1973",
+  "private": true,
+  "overrides": {"exceljs": {"uuid": "11.1.1"}},
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "build:mac": "electron-builder --mac dmg --arm64 --publish never",
+    "build:win": "electron-builder --win zip --x64 --publish never"
+  },
+  "build": {
+    "appId": "com.shine1973.railway-profile-design",
+    "productName": "线路拉坡",
+    "files": [
+      "desktop/**",
+      "src/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "identity": null
+    },
+    "win": {
+      "signAndEditExecutable": false
+    },
+    "artifactName": "railway-profile-${version}-${os}-${arch}.${ext}"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "jszip": "3.10.2"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  }
+}
