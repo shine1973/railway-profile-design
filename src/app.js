@@ -1,5 +1,8 @@
 import {newProject,calculate,integer,format,History} from './core.js';
 import {fullView,clampView,zoomView,displayOffset,elevationAxis,sequenceTicks} from './chart-view.js';
+import {layoutLabels} from './chart-labels.js';
+const labelMeasure=document.createElement('canvas').getContext('2d');
+labelMeasure.font='11px -apple-system, BlinkMacSystemFont, Segoe UI, Microsoft YaHei, sans-serif';
 const $=id=>document.getElementById(id), api=window.desktop;
 let history=new History(newProject()), saved=JSON.stringify(history.current), results=[], view=null, pan=null, busy=false;
 const project=()=>history.current;
@@ -78,14 +81,25 @@ const svgNS='http://www.w3.org/2000/svg';
 function node(tag,attrs,text){const el=document.createElementNS(svgNS,tag);Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));if(text!==undefined)el.textContent=text;return el;}
 let geometry=null;
 function drawChart(){
-  const svg=$('chart'),width=svg.clientWidth||900,height=svg.clientHeight||340;
-  svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.replaceChildren();if(!results.length){geometry=null;return;}
+  const svg=$('chart'),width=svg.clientWidth||900;
+  svg.replaceChildren();if(!results.length){geometry=null;svg.parentElement.style.height='340px';return;}
   if(!view)view=fullView(results.length);
   const visible=results.filter(r=>r.index+1>=view.min-1&&r.index+1<=view.max+1);
   const offset=displayOffset(results,project().controls);
   const vals=(visible.length?visible:results).flatMap(r=>[r.measured,...(r.design===null?[]:[r.design]),...(Object.hasOwn(project().controls,r.id)?[r.measured+project().controls[r.id]]:[])]);
   const axis=elevationAxis(vals.map(v=>v+offset));
-  const yMin=axis.min,yMax=axis.max,left=62,right=24,top=30,bottom=36;
+  const yMin=axis.min,yMax=axis.max,left=62,right=24,bottom=36;
+  const labelItems=visible.filter(r=>r.index+1>=view.min&&r.index+1<=view.max).flatMap(r=>{
+    const texts=[];
+    if($('labelNo').checked)texts.push(String(r.no));
+    if($('labelFeature').checked&&r.feature)texts.push(r.feature);
+    if($('labelLift').checked&&r.lift!==null)texts.push(format(r.lift)+' mm');
+    return texts.length?[{id:r.id,x:left+(r.index+1-view.min)/(view.max-view.min)*(width-left-right),text:texts.join(' · '),value:r.measured,negative:r.lift!==null&&r.lift<0}]:[];
+  });
+  const labelLayout=layoutLabels(labelItems,left,width-right,text=>labelMeasure.measureText(text).width);
+  const height=340+labelLayout.height,top=30+labelLayout.height;
+  const desiredHeight=height+'px';if(svg.parentElement.style.height!==desiredHeight)svg.parentElement.style.height=desiredHeight;
+  svg.setAttribute('viewBox',`0 0 ${width} ${height}`);
   const x=v=>left+(v-view.min)/(view.max-view.min)*(width-left-right), y=v=>height-bottom-(v+offset-yMin)/(yMax-yMin)*(height-top-bottom);
   geometry={x,y,width,height,left,right,top,bottom,yMin,yMax,offset};
   $('chartBasis').textContent=`图示高程 = 相对高程 + ${offset} mm`;
@@ -103,9 +117,20 @@ function drawChart(){
     const selected=Object.hasOwn(project().controls,r.id),negative=r.lift!==null&&r.lift<0;
     group.append(node('circle',{cx:x(r.index+1),cy:y(r.measured),r:3,fill:negative?'#d4374f':'#fff',stroke:negative?'#d4374f':'#27899a','stroke-width':1.3}));
     if(selected){const cy=y(r.measured+project().controls[r.id]);group.append(node('line',{x1:x(r.index+1),y1:y(r.measured),x2:x(r.index+1),y2:cy,stroke:'#dca855','stroke-dasharray':'3 3'}));group.append(node('circle',{cx:x(r.index+1),cy,r:6,fill:'#fff7e9',stroke:'#d99432','stroke-width':2.2}));}
-    const texts=[];if($('labelNo').checked)texts.push(String(r.no));if($('labelFeature').checked&&r.feature)texts.push(r.feature);if($('labelLift').checked&&r.lift!==null)texts.push(format(r.lift)+' mm');
-    if(texts.length)group.append(node('text',{x:x(r.index+1)+5,y:y(r.measured)-12,fill:negative?'#d4374f':'#617d88','font-size':10},texts.join(' · ')));
+
   }
+  const annotations=node('g',{'pointer-events':'none'});svg.append(annotations);
+  for(const label of labelLayout.labels){
+    annotations.append(node('line',{x1:label.x+label.width/2,y1:24+label.y+label.height,x2:label.anchorX,y2:y(label.value)-5,stroke:label.negative?'#e7a5af':'#b7cbd1','stroke-width':1,'stroke-dasharray':'2 3'}));
+  }
+  for(const label of labelLayout.labels){
+    annotations.append(node('rect',{x:label.x,y:24+label.y,width:label.width,height:label.height,rx:4,fill:'#fff',stroke:label.negative?'#edc0c7':'#dce7eb'}));
+    const text=node('text',{x:label.x+6,y:24+label.y+16,fill:label.negative?'#d4374f':'#446774','font-size':11});
+    text.append(node('title',{},label.text));
+    label.lines.forEach((line,i)=>text.append(node('tspan',{x:label.x+6,y:24+label.y+16+i*16},line)));
+    annotations.append(text);
+  }
+
 }
 function coords(e){const r=$('chart').getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};}
 function hit(e){if(!geometry)return null;const c=coords(e),g=geometry;let best=null,dist=Infinity;for(const r of results){const ys=[g.y(r.measured)];if(Object.hasOwn(project().controls,r.id))ys.push(g.y(r.measured+project().controls[r.id]));const d=Math.min(...ys.map(y=>Math.hypot(g.x(r.index+1)-c.x,y-c.y)));if(d<dist){best=r;dist=d;}}return dist<=16?best:null;}
@@ -135,7 +160,7 @@ $('chart').onpointermove=e=>{
     return;
   }
   const r=hit(e),tip=$('tooltip');tip.hidden=!r;if(!r)return;
-  tip.textContent=`现场点号 ${r.no}${r.no!==r.index+1?` · 记录序号 ${r.index+1}`:''}\n图示实测 ${format(r.measured+geometry.offset)} mm\n图示设计 ${format(r.design===null?null:r.design+geometry.offset)}${r.design===null?'':' mm'}\n起道量 ${format(r.lift)}${r.lift===null?'':' mm'}`;
+  tip.textContent=`${r.feature?`特征点 ${r.feature}\n`:''}现场点号 ${r.no}${r.no!==r.index+1?` · 记录序号 ${r.index+1}`:''}\n图示实测 ${format(r.measured+geometry.offset)} mm\n图示设计 ${format(r.design===null?null:r.design+geometry.offset)}${r.design===null?'':' mm'}\n起道量 ${format(r.lift)}${r.lift===null?'':' mm'}`;
   const c=coords(e);tip.style.left=Math.min(c.x+14,geometry.width-240)+'px';tip.style.top=Math.max(8,Math.min(c.y+12,geometry.height-120))+'px';
 };
 $('chart').onpointerleave=()=>$('tooltip').hidden=true;
