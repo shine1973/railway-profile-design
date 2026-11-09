@@ -73,7 +73,7 @@ export function calculate(project) {
   }
   // A common assumed datum changes no height differences or lift settings.
   const minimum = result.reduce((min,r)=>Math.min(min,r.measured),0);
-  const datum = Math.ceil((1000-minimum)/1000)*1000;
+  const datum = 10-minimum;
   for (const r of result) {
     r.datum=datum;
     r.instrument+=datum;

@@ -2,3 +2,5 @@
 
 .zoomtools{display:flex;align-items:center;justify-content:space-between;padding:6px 16px;color:#7b909a;font-size:11px;gap:12px}.zoomtools label{display:flex;align-items:center;gap:8px}.zoomtools input{width:100px;accent-color:var(--teal)}#chart{cursor:default}#chart.dragging{cursor:grabbing}#zoomLevel{font-variant-numeric:tabular-nums;color:#718690;font-size:11px}.chartfoot{flex-wrap:wrap;gap:6px}
 @media(max-width:1150px){th,td{padding-left:7px;padding-right:7px}}
+
+.tablecard th,.tablecard td,.tablecard td.editable input{text-align:center;vertical-align:middle}
