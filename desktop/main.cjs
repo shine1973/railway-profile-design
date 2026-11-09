@@ -36,11 +36,11 @@ ipcMain.handle('save',respond(async(raw)=>{
   if(r.canceled)return null;
   await atomicWrite(r.filePath,JSON.stringify(project,null,2));return r.filePath;
 }));
-ipcMain.handle('export',respond(async(raw)=>{
+ipcMain.handle('export',respond(async(raw,options)=>{
   const project=(await core()).validateProject(raw);
   const r=await dialog.showSaveDialog(win,{title:'导出 Excel 成果',defaultPath:`${project.name.replace(/[\\/:*?"<>|]/g,'_')}-拉坡成果.xlsx`,filters:[{name:'Excel 工作簿',extensions:['xlsx']}]});
   if(r.canceled)return null;
-  await atomicWrite(r.filePath,await (await workbook()).exportWorkbook(project));return r.filePath;
+  await atomicWrite(r.filePath,await (await workbook()).exportWorkbook(project,options));return r.filePath;
 }));
 ipcMain.handle('template',respond(async()=>{
   const r=await dialog.showSaveDialog(win,{title:'导出示例模板',defaultPath:'测量数据填写模板.xlsx',filters:[{name:'Excel 工作簿',extensions:['xlsx']}]});

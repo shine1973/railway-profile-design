@@ -1,5 +1,5 @@
 import {newProject,calculate,integer,format,History} from './core.js';
-import {fullView,clampView,zoomView,displayOffset,elevationAxis,sequenceTicks} from './chart-view.js';
+import {fullView,clampView,zoomView,chartModel} from './chart-view.js';
 import {layoutLabels} from './chart-labels.js';
 const labelMeasure=document.createElement('canvas').getContext('2d');
 labelMeasure.font='11px -apple-system, BlinkMacSystemFont, Segoe UI, Microsoft YaHei, sans-serif';
@@ -30,7 +30,7 @@ $('open').onclick=()=>action(async()=>{
 });
 $('save').onclick=()=>action(async()=>{const snapshot=structuredClone(project());const file=await request('saveProject',snapshot);if(file){saved=JSON.stringify(snapshot);status(`已保存：${file}`);}});
 $('template').onclick=()=>action(async()=>{const file=await request('exportTemplate');if(file)status(`已导出填写模板：${file}`);});
-$('export').onclick=()=>action(async()=>{const file=await request('exportExcel',project());if(file)status(`已导出可编辑图表及成果：${file}`);});
+$('export').onclick=()=>action(async()=>{const file=await request('exportExcel',project(),{view,plotWidth:Math.max(100,($('chart').clientWidth||900)-86),labelNo:$('labelNo').checked,labelFeature:$('labelFeature').checked,labelLift:$('labelLift').checked});if(file)status(`已导出可编辑图表及成果：${file}`);});
 $('demo').onclick=()=>action(async()=>{
   if(!await replaceAllowed())return;
   const points=Array.from({length:45},(_,i)=>({id:`p${i+1}`,sourceRow:i+2,feature:i===0?'起点':i===17?'道岔尖轨':i===44?'终点':'',no:i-2,fore:1200+Math.round(i*3+32*Math.sin(i/5)),back:null}));
@@ -85,10 +85,8 @@ function drawChart(){
   const svg=$('chart'),width=svg.clientWidth||900;
   svg.replaceChildren();if(!results.length){geometry=null;svg.parentElement.style.height='340px';return;}
   if(!view)view=fullView(results.length);
-  const visible=results.filter(r=>r.index+1>=view.min-1&&r.index+1<=view.max+1);
-  const offset=displayOffset(results,project().controls);
-  const vals=(visible.length?visible:results).flatMap(r=>[r.measured,...(r.design===null?[]:[r.design]),...(Object.hasOwn(project().controls,r.id)?[r.measured+project().controls[r.id]]:[])]);
-  const axis=elevationAxis(vals.map(v=>v+offset));
+  const model=chartModel(results,project().controls,{view,plotWidth:width-86});
+  const {visible,offset,axis}=model;
   const yMin=axis.min,yMax=axis.max,left=62,right=24,bottom=36;
   const labelItems=visible.filter(r=>r.index+1>=view.min&&r.index+1<=view.max).flatMap(r=>{
     const texts=[];
@@ -107,7 +105,7 @@ function drawChart(){
   $('zoomLevel').textContent=((fullView(results.length).max-.5)/(view.max-view.min)).toFixed(2)+'×';
   const defs=node('defs',{}),clip=node('clipPath',{id:'plotClip'});clip.append(node('rect',{x:left,y:top,width:width-left-right,height:height-top-bottom}));defs.append(clip);svg.append(defs);
   for(const value of axis.ticks){svg.append(node('line',{x1:left,y1:y(value-offset),x2:width-right,y2:y(value-offset),stroke:'#e6eef1','stroke-dasharray':'3 4'}));svg.append(node('text',{x:left-9,y:y(value-offset)+4,'text-anchor':'end',fill:'#8b9ca5','font-size':10},value));}
-  for(const value of sequenceTicks(view,results.length,width-left-right)){svg.append(node('line',{x1:x(value),y1:top,x2:x(value),y2:height-bottom,stroke:'#edf2f4','stroke-dasharray':'3 4'}));svg.append(node('text',{x:x(value),y:height-13,'text-anchor':'middle',fill:'#8b9ca5','font-size':10},value));}
+  for(const value of model.ticks){svg.append(node('line',{x1:x(value),y1:top,x2:x(value),y2:height-bottom,stroke:'#edf2f4','stroke-dasharray':'3 4'}));svg.append(node('text',{x:x(value),y:height-13,'text-anchor':'middle',fill:'#8b9ca5','font-size':10},value));}
   svg.append(node('text',{x:12,y:16,fill:'#92a3ad','font-size':10},'图示高程 mm'));svg.append(node('text',{x:width-right,y:height-1,'text-anchor':'end',fill:'#92a3ad','font-size':9},'记录序号'));
   const group=node('g',{'clip-path':'url(#plotClip)'});svg.append(group);
   for(const [field,color] of [['measured','#27899a'],['design','#df9e3d']]){

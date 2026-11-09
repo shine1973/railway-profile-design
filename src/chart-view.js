@@ -41,3 +41,16 @@ export function sequenceTicks(view, count, plotWidth = 800) {
   }
   return ticks;
 }
+
+// Shared by the interactive chart and editable Excel chart.
+export function chartModel(rows, controls, options = {}) {
+  const count=rows.length;
+  const candidate=options.view;
+  const view=candidate && Number.isFinite(candidate.min) && Number.isFinite(candidate.max) && candidate.max>candidate.min
+    ? clampView(candidate,count) : fullView(count);
+  const width=Number.isFinite(options.plotWidth)?Math.max(100,Math.min(4000,options.plotWidth)):800;
+  const visible=rows.filter(r=>r.index+1>=view.min-1 && r.index+1<=view.max+1);
+  const offset=displayOffset(rows,controls);
+  const values=(visible.length?visible:rows).flatMap(r=>[r.measured,...(r.design===null?[]:[r.design]),...(Object.hasOwn(controls,r.id)?[r.measured+controls[r.id]]:[])]);
+  return {view,visible,offset,axis:elevationAxis(values.map(v=>v+offset)),ticks:sequenceTicks(view,count,width)};
+}
