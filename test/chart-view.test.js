@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import {fullView,clampView,zoomView,displayOffset,elevationAxis,sequenceTicks} from '../src/chart-view.js';
 import {calculate,newProject} from '../src/core.js';
 
+test('坐标加密随可用空间适配，数字留距且放大后显示每个序号',()=>{
+  const view=fullView(89),wide=sequenceTicks(view,89,800),narrow=sequenceTicks(view,89,400);
+  assert.ok(wide.length>=16);assert.ok(wide.length>narrow.length);
+  for(const width of [400,800,1400]) {
+    const ticks=sequenceTicks(view,89,width);
+    for(let i=1;i<ticks.length;i++)assert.ok((ticks[i]-ticks[i-1])/89*width>=36);
+  }
+  assert.deepEqual(sequenceTicks({min:20.5,max:30.5},89,800),[21,22,23,24,25,26,27,28,29,30]);
+  const axis=elevationAxis([100,300]);
+  assert.ok(axis.ticks.length>=10);assert.ok(axis.ticks.every(v=>v>=0&&v%5===0));
+  assert.ok(elevationAxis([100,300],500).ticks.length>axis.ticks.length);
+});
+
 test('全区段统一正高程基准，起道量和高差不变',()=>{
   const p=newProject([{id:'p1',no:-2,fore:1200,back:null},{id:'p2',no:-2,fore:1600,back:null}]);
   p.controls={p1:0,p2:-200};const rows=calculate(p),offset=displayOffset(rows,p.controls);

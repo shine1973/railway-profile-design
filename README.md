@@ -1,6 +1,6 @@
 # 线路拉坡
 
-离线铁路纵断面测量与拉坡设计桌面应用。当前为 0.1.3 预览，支持 macOS Apple Silicon、Windows 10/11 x64。
+离线铁路纵断面测量与拉坡设计桌面应用。当前为 0.1.4 预览，支持 macOS Apple Silicon、Windows 10/11 x64。
 
 ## 使用
 
