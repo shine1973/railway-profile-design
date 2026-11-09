@@ -42,5 +42,10 @@ ipcMain.handle('export',respond(async(raw)=>{
   if(r.canceled)return null;
   await atomicWrite(r.filePath,await (await workbook()).exportWorkbook(project));return r.filePath;
 }));
+ipcMain.handle('template',respond(async()=>{
+  const r=await dialog.showSaveDialog(win,{title:'导出示例模板',defaultPath:'测量数据填写模板.xlsx',filters:[{name:'Excel 工作簿',extensions:['xlsx']}]});
+  if(r.canceled)return null;
+  await atomicWrite(r.filePath,await (await workbook()).exportTemplate());return r.filePath;
+}));
 app.whenReady().then(createWindow);
 app.on('window-all-closed',()=>app.quit());

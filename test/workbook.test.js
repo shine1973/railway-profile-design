@@ -3,8 +3,24 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
-import {importWorkbook,exportWorkbook} from '../desktop/workbook.js';
+import {importWorkbook,exportWorkbook,exportTemplate} from '../desktop/workbook.js';
 import {calculate,newProject,parseRows} from '../src/core.js';
+test('填写模板：空白数据表、独立示例不误导入、填写转站后可直接导入',async()=>{
+  const buffer=await exportTemplate();
+  await assert.rejects(importWorkbook(buffer,'空模板'),/没有可导入的测点/);
+  const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);
+  const s=book.getWorksheet('测量数据');
+  assert.deepEqual(s.getRow(1).values.slice(1),['特征点','点号','前视读数','后视读数']);
+  assert.ok(book.getWorksheet('填写说明'));
+  for(let r=2;r<=s.rowCount;r++)for(let c=1;c<=4;c++)assert.equal(s.getCell(r,c).value,null);
+  s.getRow(2).values=['起点',-2,1200,null];
+  s.getRow(3).values=['转站点',-1,1250,800];
+  s.getRow(4).values=['',0,830,null];
+  const p=await importWorkbook(await book.xlsx.writeBuffer(),'填写模板');
+  assert.equal(p.points.length,3);
+  assert.deepEqual(p.points.map(p=>p.no),[-2,-1,0]);
+  assert.deepEqual(calculate(p).map(p=>p.measured),[0,-50,-80]);
+});
 test('导出九列、原始数据、负值样式、真实可编辑散点图与空段',async()=>{
   const p=newProject(parseRows([['特征点','点号','前视读数','后视读数'],['<岔心>',0,1200,null],['',0,1220,null],['',2,1240,null],['',3,1250,null]]));
   p.controls={p3:-5,p4:0};const buffer=await exportWorkbook(p);

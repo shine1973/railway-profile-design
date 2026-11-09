@@ -29,6 +29,7 @@ $('open').onclick=()=>action(async()=>{
   history=new History(r.project);saved=JSON.stringify(project());view=null;status(`已打开：${r.file}`);
 });
 $('save').onclick=()=>action(async()=>{const snapshot=structuredClone(project());const file=await request('saveProject',snapshot);if(file){saved=JSON.stringify(snapshot);status(`已保存：${file}`);}});
+$('template').onclick=()=>action(async()=>{const file=await request('exportTemplate');if(file)status(`已导出填写模板：${file}`);});
 $('export').onclick=()=>action(async()=>{const file=await request('exportExcel',project());if(file)status(`已导出可编辑图表及成果：${file}`);});
 $('demo').onclick=()=>action(async()=>{
   if(!await replaceAllowed())return;
@@ -52,7 +53,7 @@ function render(){
   $('negativeCount').textContent=negative.length;$('negativeCount').classList.toggle('negative',negative.length>0);
   $('saveState').textContent=dirty()?'● 未保存':results.length?'已保存':'尚未导入';
   api?.setDirty(dirty());
-  $('save').disabled=busy||!results.length;$('export').disabled=busy||!results.length;$('import').disabled=busy;$('open').disabled=busy;
+  $('save').disabled=busy||!results.length;$('export').disabled=busy||!results.length;$('import').disabled=busy;$('open').disabled=busy;$('template').disabled=busy;
   $('undo').disabled=!history.past.length;$('redo').disabled=!history.future.length;$('clear').disabled=!selected.length;
   $('empty').hidden=results.length>0;
   $('controls').innerHTML=results.filter(r=>selected.includes(r.id)).map(r=>`<div class="controlitem"><div class="top"><span>点号 ${r.no}${r.no!==r.index+1?` <small> / 序号 ${r.index+1}</small>`:''}</span><button data-remove="${r.id}" aria-label="取消控制点 ${r.no}">×</button></div><label>起道量 <input type="text" inputmode="numeric" aria-label="控制点 ${r.no} 起道量" data-lift="${r.id}" value="${project().controls[r.id]}" class="${project().controls[r.id]<0?'negative':''}"> mm</label></div>`).join('') || '<p class="hint">尚未选择控制点。<br>选择两个或更多测点后生成设计线。</p>';

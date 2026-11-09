@@ -1,6 +1,51 @@
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
-import {parseRows, newProject, validateProject, calculate} from '../src/core.js';
+import {HEADERS, parseRows, newProject, validateProject, calculate} from '../src/core.js';
+
+export async function exportTemplate() {
+  const book = new ExcelJS.Workbook();
+  book.creator = '线路拉坡';
+  const sheet = book.addWorksheet('测量数据', {views:[{state:'frozen',ySplit:1}]});
+  sheet.addRow(HEADERS);
+  [28,16,20,20].forEach((width,i)=>{sheet.getColumn(i+1).width=width;});
+  sheet.getRow(1).height=30;
+  sheet.getRow(1).eachCell(cell=>{
+    cell.font={bold:true,color:{argb:'FFFFFFFF'}};
+    cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF173A48'}};
+  });
+  ['选填，如起点、岔心、终点','必填整数；允许负号、0、重复或不连续的现场点号','必填，原仪器站读数，单位 mm，填写整毫米','仅转站点填写：转站后复测本点的读数，单位 mm；普通点留空'].forEach((note,i)=>{sheet.getCell(1,i+1).note=note;});
+  for(let r=2;r<=201;r++) {
+    sheet.getRow(r).height=24;
+    for(let c=1;c<=4;c++) {
+      const cell=sheet.getCell(r,c);
+      cell.border={bottom:{style:'hair',color:{argb:'FFDCE5E9'}}};
+      if(c>1) {
+        cell.numFmt='0';
+        cell.dataValidation={type:'whole',operator:'between',allowBlank:true,formulae:[-2147483648,2147483647],showErrorMessage:true,errorStyle:'stop',errorTitle:'请填写整数',error:'点号填写整数，尺读数填写整毫米。'};
+      }
+    }
+  }
+  const guide=book.addWorksheet('填写说明');
+  guide.columns=[{width:24},{width:24},{width:24},{width:24},{width:65}];
+  const notes=[
+    '测量数据填写说明',
+    '在“测量数据”工作表第二行开始填写，每个实际测点一行，按现场测量顺序记录。预留200行，可继续向下填写。',
+    '特征点选填；点号和前视读数必填。尺读数单位为 mm，填写整毫米数值，不填写公式或单位文字。',
+    '转站时，在同一行填写原站的前视读数和新站复测该点的后视读数，不重复增加测点行。普通点后视读数留空。',
+    '点号可以从负数或0开始，允许现场标号重复或不连续；软件按记录顺序及固定测点间距计算距离。',
+    '轨枕间距固定0.6米，测点间隔的轨枕根数在软件内设置，默认为6根。无需填写绝对高程。',
+    '下方仅为示例，不参与导入。“测量数据”表保持空白，填写后保存为 .xlsx 即可导入软件。'
+  ];
+  notes.forEach((text,i)=>{guide.mergeCells(i+1,1,i+1,5);guide.getCell(i+1,1).value=text;guide.getCell(i+1,1).alignment={vertical:'middle',wrapText:true};guide.getRow(i+1).height=i===0?30:38;});
+  guide.getCell('A1').font={bold:true,size:16};
+  // Example headings intentionally differ from the four import headings.
+  guide.addRow(['特征说明（示例）','现场点号（示例）','前视读数（mm）','后视读数（mm）','说明']);
+  guide.addRow(['起点',-2,1200,null,'本次测量的第一个点']);
+  guide.addRow(['转站点',-1,1250,800,'原站读1250；转站后复测同一点读800，填在同一行']);
+  guide.addRow(['',0,830,null,'新站继续测量下一个实际点']);
+  guide.addRow(['终点',1,850,null,'普通点后视留空']);
+  return book.xlsx.writeBuffer();
+}
 
 function cellValue(cell) {
   const v = cell.value;
