@@ -19,22 +19,26 @@ test('填写模板：空白数据表、独立示例不误导入、填写转站�
   const p=await importWorkbook(await book.xlsx.writeBuffer(),'填写模板');
   assert.equal(p.points.length,3);
   assert.deepEqual(p.points.map(p=>p.no),[-2,-1,0]);
-  assert.deepEqual(calculate(p).map(p=>p.measured),[0,-50,-80]);
+  assert.deepEqual(calculate(p).map(p=>p.measured),[2000,1950,1920]);
 });
-test('导出九列、原始数据、负值样式、真实可编辑散点图与空段',async()=>{
+test('导出十列、原始数据、负值样式、真实可编辑散点图与空段',async()=>{
   const p=newProject(parseRows([['特征点','点号','前视读数','后视读数'],['<岔心>',0,1200,null],['',0,1220,null],['',2,1240,null],['',3,1250,null]]));
   p.controls={p3:-5,p4:0};const buffer=await exportWorkbook(p);
   const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);const s=book.getWorksheet('测量数据');
-  assert.equal(s.getCell('F2').value,'未设计');assert.equal(s.getCell('I3').value,-5);assert.equal(s.getCell('I3').font.color.argb,'FFDC3545');assert.equal(s.getCell('G4').value,null);assert.equal(s.getCell('G3').numFmt,'0.0');assert.equal(s.getCell('A2').value,'<岔心>');
+  assert.deepEqual(s.getRow(1).values.slice(1),['特征点','点号','前视读数','后视读数','仪器高','实测高程','设计高程','坡度','递增量','起道量']);
+  calculate(p).forEach((r,i)=>{assert.equal(s.getCell(i+2,5).value,r.instrument);assert.equal(s.getCell(i+2,6).value,r.measured);assert.ok(r.measured>=1000);});
+  assert.equal(s.getCell('G2').value,'未设计');assert.equal(s.getCell('J3').value,-5);assert.equal(s.getCell('J3').font.color.argb,'FFDC3545');assert.equal(s.getCell('H4').value,null);assert.equal(s.getCell('H3').numFmt,'0.0');assert.equal(s.getCell('A2').value,'<岔心>');
   const zip=await JSZip.loadAsync(buffer),chart=await zip.file('xl/charts/chart1.xml').async('string');
   assert.match(chart,/<c:scatterChart>/);assert.match(chart,/'测量数据'|&apos;测量数据&apos;/);assert.match(chart,/<c:dispBlanksAs val="gap"/);
+  assert.match(chart,/\$F\$2:\$F\$5/);assert.match(chart,/\$G\$2:\$G\$5/);
   assert.match(await zip.file('xl/worksheets/sheet1.xml').async('string'),/<drawing r:id="rId1"/);
   const imported=await importWorkbook(buffer,'test');assert.deepEqual(imported.points.map(p=>p.no),[0,0,2,3]);
 });
 const sample=process.env.SURVEY_SAMPLE;
-test('用户提供的实测表：逐点对照参考高程，统一到首点0',{skip:!sample},async()=>{
+test('用户提供的实测表：逐点对照参考高差与非负假定高程',{skip:!sample},async()=>{
   const buffer=await fs.readFile(sample),p=await importWorkbook(buffer,'现场样表');
   const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);const sheet=book.worksheets[0],baseline=sheet.getCell('F2').value;
   const result=calculate(p);assert.equal(result.length,89);
-  result.forEach(r=>assert.equal(r.measured,sheet.getCell(`F${r.sourceRow}`).value-baseline,`行 ${r.sourceRow}`));
+  assert.ok(result.every(r=>r.measured>=1000 && r.measured===r.instrument-r.fore));
+  result.forEach(r=>assert.equal(r.measured-result[0].measured,sheet.getCell(`F${r.sourceRow}`).value-baseline,`行 ${r.sourceRow}`));
 });

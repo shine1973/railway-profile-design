@@ -18,7 +18,7 @@ export function displayOffset(rows, controls) {
     if (Object.hasOwn(controls, r.id)) min = Math.min(min, r.measured + controls[r.id]);
   }
   // One common offset for the whole dataset; panning does not change heights.
-  return Math.ceil((100-min)/100)*100;
+  return min < 0 ? Math.ceil((100-min)/100)*100 : 0;
 }
 export function elevationAxis(values, plotHeight = 274) {
   const lo=Math.min(...values), hi=Math.max(...values), padding=Math.max(10,(hi-lo)*.12);

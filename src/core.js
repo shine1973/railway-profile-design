@@ -55,7 +55,7 @@ export function calculate(project) {
   let hi = project.points[0]?.fore ?? 0;
   const result = project.points.map((p, i) => {
     const measured = hi - p.fore;
-    const r = {...p, index: i, distance: i * step, measured, design: null, lift: null, slope: null, increment: null};
+    const r = {...p, index: i, distance: i * step, instrument: hi, measured, design: null, lift: null, slope: null, increment: null};
     if (p.back !== null) hi = measured + p.back;
     return r;
   });
@@ -70,6 +70,15 @@ export function calculate(project) {
       r.lift = r.design - r.measured;
       if (i < b.index) { r.increment = increment; r.slope = increment / step; }
     }
+  }
+  // A common assumed datum changes no height differences or lift settings.
+  const minimum = result.reduce((min,r)=>Math.min(min,r.measured),0);
+  const datum = Math.ceil((1000-minimum)/1000)*1000;
+  for (const r of result) {
+    r.datum=datum;
+    r.instrument+=datum;
+    r.measured+=datum;
+    if(r.design!==null)r.design+=datum;
   }
   return result;
 }

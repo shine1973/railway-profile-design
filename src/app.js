@@ -62,7 +62,7 @@ function render(){
     input.onchange=()=>{try{const value=integer(input.value,'起道量');mutate(p=>p.controls[input.dataset.lift]=value);}catch(e){invalid(input,e.message);}};
     input.onkeydown=e=>{if(e.key==='Enter'){input.blur();}if(e.key==='Escape'){input.value=project().controls[input.dataset.lift];clearInvalid(input);input.blur();}};
   });
-  $('rows').innerHTML=results.map(r=>`<tr data-row="${r.id}" class="${selected.includes(r.id)?'controlrow':''}"><td><input type="checkbox" aria-label="选择第 ${r.index+1} 个测点" data-select="${r.id}" ${selected.includes(r.id)?'checked':''}></td><td>${r.index+1}</td>${['feature','no','fore','back'].map(k=>`<td class="editable" tabindex="0" data-id="${r.id}" data-key="${k}">${escape(r[k])}</td>`).join('')}<td>${format(r.measured)}</td><td class="${r.design===null?'undesign':''}">${format(r.design)}</td><td>${format(r.slope,1,'')}</td><td>${format(r.increment,1,'')}</td><td class="${r.lift===null?'undesign':r.lift<0?'negative':''}">${format(r.lift)}</td></tr>`).join('');
+  $('rows').innerHTML=results.map(r=>`<tr data-row="${r.id}" class="${selected.includes(r.id)?'controlrow':''}"><td><input type="checkbox" aria-label="选择第 ${r.index+1} 个测点" data-select="${r.id}" ${selected.includes(r.id)?'checked':''}></td><td>${r.index+1}</td>${['feature','no','fore','back'].map(k=>`<td class="editable" tabindex="0" data-id="${r.id}" data-key="${k}">${escape(r[k])}</td>`).join('')}<td>${format(r.instrument)}</td><td>${format(r.measured)}</td><td class="${r.design===null?'undesign':''}">${format(r.design)}</td><td>${format(r.slope,1,'')}</td><td>${format(r.increment,1,'')}</td><td class="${r.lift===null?'undesign':r.lift<0?'negative':''}">${format(r.lift)}</td></tr>`).join('');
   document.querySelectorAll('[data-select]').forEach(i=>i.onchange=()=>toggle(i.dataset.select));
   document.querySelectorAll('td.editable').forEach(td=>{td.onclick=()=>edit(td);td.onkeydown=e=>{if(e.key==='Enter')edit(td);};});
   drawChart();
@@ -103,7 +103,7 @@ function drawChart(){
   svg.setAttribute('viewBox',`0 0 ${width} ${height}`);
   const x=v=>left+(v-view.min)/(view.max-view.min)*(width-left-right), y=v=>height-bottom-(v+offset-yMin)/(yMax-yMin)*(height-top-bottom);
   geometry={x,y,width,height,left,right,top,bottom,yMin,yMax,offset};
-  $('chartBasis').textContent=`图示高程 = 相对高程 + ${offset} mm`;
+  $('chartBasis').textContent=offset ? `图示高程 = 假定高程 + ${offset} mm` : `统一假定基准 · 首点高程 ${results[0].datum} mm`;
   $('zoomLevel').textContent=((fullView(results.length).max-.5)/(view.max-view.min)).toFixed(2)+'×';
   const defs=node('defs',{}),clip=node('clipPath',{id:'plotClip'});clip.append(node('rect',{x:left,y:top,width:width-left-right,height:height-top-bottom}));defs.append(clip);svg.append(defs);
   for(const value of axis.ticks){svg.append(node('line',{x1:left,y1:y(value-offset),x2:width-right,y2:y(value-offset),stroke:'#e6eef1','stroke-dasharray':'3 4'}));svg.append(node('text',{x:left-9,y:y(value-offset)+4,'text-anchor':'end',fill:'#8b9ca5','font-size':10},value));}

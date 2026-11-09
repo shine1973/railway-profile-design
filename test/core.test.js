@@ -3,11 +3,26 @@ import assert from 'node:assert/strict';
 import {parseRows,newProject,calculate,validateProject,History,format} from '../src/core.js';
 const head=['特征点','点号','前视读数','后视读数'];
 function fixture(){return newProject(parseRows([head,['',-2,1200,null],['',-2,1250,800],['岔心',5,830,null],['',6,850,null]]));}
+test('统一假定高程与仪器高：多次转站、读数修改、旧项目重开',()=>{
+  const p=fixture();p.points[2].back=400;p.points[3].fore=6000;p.controls={p2:0,p5:-20};
+  for(const project of [p,validateProject(JSON.parse(JSON.stringify(p)))]) {
+    const rows=calculate(project);
+    assert.ok(rows.every(r=>r.measured>=1000));
+    assert.equal(rows[0].measured%1000,0);
+    rows.forEach((r,i)=>{
+      assert.equal(r.measured,r.instrument-r.fore);
+      if(i)assert.equal(r.instrument,rows[i-1].back===null?rows[i-1].instrument:rows[i-1].measured+rows[i-1].back);
+    });
+    assert.equal(rows.at(-1).lift,-20);
+  }
+  p.points[3].fore+=10000;
+  assert.ok(calculate(p).every(r=>r.measured>=1000));
+});
 test('转站、重复点号、固定距离及零后视',()=>{
   const p=fixture(),r=calculate(p);
-  assert.deepEqual(r.map(p=>p.measured),[0,-50,-80,-100]);
+  assert.deepEqual(r.map(p=>p.measured),[2000,1950,1920,1900]);
   r.forEach((r,i)=>assert.ok(Math.abs(r.distance-i*3.6)<1e-10));
-  p.points[1].back=0;assert.equal(calculate(p)[2].measured,-880);
+  p.points[1].back=0;assert.equal(calculate(p)[2].measured-calculate(p)[0].measured,-880);
 });
 test('表头换序、空行、旧结果忽略，错误保留原行号',()=>{
   const rows=[['特征点','后视读数','点号','前视读数','设计高程'],['',null,0,1000,999],[],['x',null,0,1010,123]];
@@ -18,13 +33,13 @@ test('表头换序、空行、旧结果忽略，错误保留原行号',()=>{
 test('分段设计、末点留空、首末范围之外未设计',()=>{
   const p=fixture();p.controls={p3:20,p4:0};const r=calculate(p);
   assert.equal(r[0].design,null);assert.equal(r[3].design,null);
-  assert.equal(r[1].design,-30);assert.equal(r[2].design,-80);
+  assert.equal(r[1].design,1970);assert.equal(r[2].design,1920);
   assert.ok(Math.abs(r[1].slope-(-50/3.6))<1e-10);assert.equal(r[2].slope,null);
   p.controls.p5=-5;const r2=calculate(p);assert.equal(r2[2].increment,-25);assert.equal(r2[3].lift,-5);assert.equal(r2[3].slope,null);
 });
 test('改读数保留控制点起道设置，不累计舍入；改变间距仅改变坡度',()=>{
   const p=fixture();p.controls={p2:1,p5:3};const before=calculate(p);
-  assert.ok(Math.abs(before[1].design-(1+(-97-1)/3))<1e-10);
+  assert.ok(Math.abs(before[1].design-(2001+(-97-1)/3))<1e-10);
   p.points[2].fore+=10;assert.equal(calculate(p)[3].lift,3);
   p.sleepers=12;const r=calculate(p);assert.equal(r[0].slope,before[0].slope/2);
 });
