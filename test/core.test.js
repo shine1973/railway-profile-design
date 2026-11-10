@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseRows,newProject,calculate,validateProject,History,format,moveControl,pickEndpoint,removeSegment,cancelPending} from '../src/core.js';
+import {parseRows,newProject,calculate,validateProject,History,format,moveControl,extendControl,extensionStart,pickEndpoint,removeSegment,cancelPending} from '../src/core.js';
 const head=['特征点','点号','前视读数','后视读数'];
 function fixture(){return newProject(parseRows([head,['',-2,1200,null],['',-2,1250,800],['岔心',5,830,null],['',6,850,null]]));}
 test('独立两点配对，不继承上一段末点，支持反选、共享端点、取消与删除',()=>{
@@ -20,7 +20,7 @@ test('独立两点配对，不继承上一段末点，支持反选、共享端�
 test('旧版项目显式迁移原有连续坡段，不改变旧设计；新版孤立控制点校验',()=>{
   const raw={...fixture(),version:1,controls:{p2:0,p3:5,p5:0}};delete raw.segments;delete raw.pendingControl;
   const migrated=validateProject(raw);
-  assert.equal(migrated.version,4);assert.deepEqual(migrated.segments,[['p2','p3'],['p3','p5']]);
+  assert.equal(migrated.version,5);assert.deepEqual(migrated.segments,[['p2','p3'],['p3','p5']]);
   assert.deepEqual(calculate(migrated),calculate(raw));
   assert.throws(()=>validateProject({...fixture(),controls:{p2:0}}),/未关联坡段/);
 });
@@ -81,3 +81,18 @@ test('不足两个点、撤销清除、项目往返校验',()=>{
   assert.throws(()=>validateProject({...p,points:[p.points[0],p.points[0]]}),/重复/);
 });
 test('四舍五入及极小负数保留负号',()=>{assert.equal(format(-1.5),'-2');assert.equal(format(-.2),'−0');assert.equal(format(2/3,1),'0.7');});
+
+test('末端按原坡度延长并直接接后坡，保存不舍入，撤销恢复',()=>{
+ const p=newProject(Array.from({length:30},(_,i)=>({id:`p${i}`,sourceRow:i+2,no:i,feature:'',fore:1000+i*i,back:null})));
+ pickEndpoint(p,'p0');pickEndpoint(p,'p7');p.controls.p7=2;
+ const before=calculate(p),slope=before[0].slope,h=new History(p),next=structuredClone(p);
+ assert.equal(extensionStart(p,'p7'),'p0');assert.equal(extensionStart(p,'p0'),null);
+ assert.ok(extendControl(next,'p7','p12'));assert.equal(next.pendingControl,'p12');
+ const rows=calculate(next);for(let i=0;i<12;i++)assert.ok(Math.abs(rows[i].slope-slope)<1e-10);
+ assert.notEqual(rows[12].design,null);assert.ok(!Number.isInteger(next.controls.p12));
+ assert.deepEqual(validateProject(JSON.parse(JSON.stringify(next))),next);
+ h.change(next);h.undo();assert.deepEqual(h.current,p);h.redo();assert.deepEqual(h.current,next);
+ pickEndpoint(next,'p25');assert.deepEqual(next.segments,[['p0','p12'],['p12','p25']]);assert.equal(next.pendingControl,null);
+ assert.equal(extensionStart(next,'p12'),null);
+ const snapshot=structuredClone(next);assert.equal(extendControl(next,'p25','p12'),false);assert.deepEqual(next,snapshot);
+});

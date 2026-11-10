@@ -1,5 +1,5 @@
 import {junctions,curveGeometry,curveHeight} from './vertical-curves.js';
-import {newProject,calculate,integer,format,History,moveControl,pickEndpoint,removeControl,removeSegment,cancelPending} from './core.js';
+import {newProject,calculate,integer,format,History,moveControl,extendControl,extensionStart,pickEndpoint,removeControl,removeSegment,cancelPending} from './core.js';
 import {fullView,clampView,zoomView,chartModel} from './chart-view.js';
 import {layoutLabels} from './chart-labels.js';
 const labelMeasure=document.createElement('canvas').getContext('2d');
@@ -68,7 +68,7 @@ function render(){
   $('save').disabled=busy||!results.length;$('export').disabled=busy||!results.length||cg.issues.length>0;$('import').disabled=busy;$('open').disabled=busy;$('template').disabled=busy;
   $('undo').disabled=!history.past.length;$('redo').disabled=!history.future.length;$('clear').disabled=!selected.length;
   $('empty').hidden=results.length>0;
-  $('controls').innerHTML='<h3 class=paneltitle>端点起道量 <span>mm</span></h3>'+(results.filter(r=>selected.includes(r.id)).map(r=>`<div class="controlitem ${r.id===project().pendingControl?'pendingcontrol':''}"><div class="top"><span>点号 ${r.no}${r.no!==r.index+1?` <small> / 序号 ${r.index+1}</small>`:''}</span><button data-remove="${r.id}" aria-label="取消控制点 ${r.no}">×</button></div><label>起道量 <input type="text" inputmode="numeric" aria-label="控制点 ${r.no} 起道量" data-lift="${r.id}" value="${project().controls[r.id]}" class="${project().controls[r.id]<0?'negative':''}"> mm</label></div>`).join('') || '<p class="hint">尚未选择控制点。<br>每次选择两个端点生成独立坡段。</p>');
+  $('controls').innerHTML='<h3 class=paneltitle>端点起道量 <span>mm</span></h3>'+(results.filter(r=>selected.includes(r.id)).map(r=>`<div class="controlitem ${r.id===project().pendingControl?'pendingcontrol':''}"><div class="top"><span>点号 ${r.no}${r.no!==r.index+1?` <small> / 序号 ${r.index+1}</small>`:''}</span><button data-remove="${r.id}" aria-label="取消控制点 ${r.no}">×</button></div><label>起道量 <input type="text" inputmode="numeric" aria-label="控制点 ${r.no} 起道量" data-lift="${r.id}" value="${format(project().controls[r.id])}" class="${project().controls[r.id]<0?'negative':''}"> mm</label></div>`).join('') || '<p class="hint">尚未选择控制点。<br>每次选择两个端点生成独立坡段。</p>');
   const pending=results.find(r=>r.id===project().pendingControl);
   $('selectionHint').hidden=!pending;
   $('chartBasis').hidden=Boolean(pending);
@@ -182,7 +182,7 @@ function drawChart(){
     if(target){
       const occupied=target.id!==pan.controlId&&Object.hasOwn(pan.original.controls,target.id);
       const color=(occupied||pan.invalid)?'#d4374f':'#d99432';
-      const cy=y(target.measured+pan.lift);
+      const cy=y(target.measured+(pan.preview?.controls[target.id]??pan.lift));
       svg.append(node('line',{x1:x(target.index+1),y1:top,x2:x(target.index+1),y2:height-bottom,stroke:color,'stroke-dasharray':'4 4','pointer-events':'none'}));
       svg.append(node('circle',{cx:x(target.index+1),cy,r:9,fill:'#fff7e9',stroke:color,'stroke-width':2,'stroke-dasharray':'3 2','pointer-events':'none'}));
     }
@@ -213,7 +213,7 @@ $('chart').oncontextmenu=e=>e.preventDefault();
 $('chart').onpointerdown=e=>{
   if(!busy&&!pan&&(e.button===0||e.button===2)&&view){
     const control=e.button===0?controlHit(e):null;
-    pan={...coords(e),view:{...view},button:e.button,moved:false,pointerId:e.pointerId,controlId:control?.id,targetId:control?.id,original:control?structuredClone(history.current):null,lift:control?history.current.controls[control.id]:null,preview:null};
+    pan={...coords(e),view:{...view},button:e.button,moved:false,pointerId:e.pointerId,controlId:control?.id,targetId:control?.id,original:control?structuredClone(history.current):null,lift:control?history.current.controls[control.id]:null,preview:null,extend:control&&$('endpointDragMode').value==='extend'&&Boolean(extensionStart(history.current,control.id))};
     $('chart').setPointerCapture(e.pointerId);
   }
 };
@@ -223,10 +223,10 @@ $('chart').onpointerup=e=>{
   if($('chart').hasPointerCapture(e.pointerId))$('chart').releasePointerCapture(e.pointerId);
   if(drag.controlId&&drag.moved){
     const next=structuredClone(history.current);
-    if(moveControl(next,drag.controlId,drag.targetId)){
+    if((drag.extend?extendControl:moveControl)(next,drag.controlId,drag.targetId)){
       history.change(next);render();
       const target=results.find(r=>r.id===drag.targetId);
-      status(`控制点已移至现场点号 ${target.no} · 记录序号 ${target.index+1}，起道量保持 ${format(next.controls[target.id])} mm`);
+      status(drag.extend?`已按原坡度延长至序号 ${target.index+1}，请直接点击后坡终点；也可取消接续`:`控制点已移至现场点号 ${target.no} · 记录序号 ${target.index+1}，起道量保持 ${format(next.controls[target.id])} mm`);
     }else{render();status(drag.targetId===drag.controlId?'控制点位置未改变':'目标位置被占用或会使坡段重叠，本次移动未提交');}
   }else if(drag.button===0&&!drag.moved){const r=hit(e);if(r)toggle(r.id);}
 };
@@ -247,12 +247,12 @@ $('chart').onpointermove=e=>{
         const occupied=target.id!==pan.controlId&&Object.hasOwn(pan.original.controls,target.id);
         if(changed){
           const preview=structuredClone(pan.original);
-          const allowed=moveControl(preview,pan.controlId,target.id);
+          const allowed=(pan.extend?extendControl:moveControl)(preview,pan.controlId,target.id);
           pan.invalid=target.id!==pan.controlId&&!allowed;
           pan.preview=allowed?preview:null;
           render();
         }
-        status((occupied||pan.invalid)?'目标位置被占用或坡段重叠，松开将取消移动':`移至现场点号 ${target.no} · 记录序号 ${target.index+1}，松开确认，Esc取消`);
+        status((occupied||pan.invalid)?'目标位置被占用或坡段重叠，松开将取消移动':`${pan.extend?'保持原坡度延长至':'移至'}现场点号 ${target.no} · 记录序号 ${target.index+1}，松开确认，Esc取消`);
       }else{
         const dx=(c.x-pan.x)/(g.width-g.left-g.right)*(pan.view.max-pan.view.min);
         view=clampView({min:pan.view.min-dx,max:pan.view.max-dx},results.length);

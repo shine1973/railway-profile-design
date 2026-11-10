@@ -29,10 +29,10 @@ export function parseRows(rows) {
   return points;
 }
 export function newProject(points = [], name = '未命名项目') {
-  return {format: 'railway-profile', version: 4, name, sleepers: 6, points, controls: {}, segments: [], pendingControl: null, curves: {}, lineType: '未指定', speed: null, speedBasis: '允许速度'};
+  return {format: 'railway-profile', version: 5, name, sleepers: 6, points, controls: {}, segments: [], pendingControl: null, curves: {}, lineType: '未指定', speed: null, speedBasis: '允许速度'};
 }
 export function validateProject(raw) {
-  if (!raw || raw.format !== 'railway-profile' || ![1,2,3,4].includes(raw.version)) throw new Error('不是受支持的线路拉坡项目（版本 1/2/3/4）');
+  if (!raw || raw.format !== 'railway-profile' || ![1,2,3,4,5].includes(raw.version)) throw new Error('不是受支持的线路拉坡项目（版本 1/2/3/4/5）');
   const sleepers = integer(raw.sleepers, '轨枕根数');
   if (sleepers < 1 || sleepers > 1000) throw new Error('轨枕根数应为 1 至 1000 的整数');
   if (!Array.isArray(raw.points) || raw.points.length > 10000) throw new Error('项目测点格式错误或超过 10000 点');
@@ -47,7 +47,7 @@ export function validateProject(raw) {
   const controls = {};
   for (const [id, lift] of Object.entries(raw.controls)) {
     if (!ids.has(id)) throw new Error('控制点对应的测点不存在');
-    controls[id] = integer(lift, '控制点起道量');
+    if(raw.version>=5){if(typeof lift!=='number'||!Number.isFinite(lift)||Math.abs(lift)>Number.MAX_SAFE_INTEGER)throw new Error('控制点起道量无效');controls[id]=lift;}else controls[id] = integer(lift, '控制点起道量');
   }
   const project={...newProject(points,String(raw.name??'未命名项目')),sleepers,controls};
   if(raw.version===1){
@@ -176,6 +176,28 @@ export function moveControl(project,fromId,toId){
   next.curves=Object.fromEntries(Object.entries(project.curves??{}).map(([key,value])=>[key.split('~').map(id=>id===fromId?toId:id).join('~'),value]));
   pruneControls(next);
   Object.assign(project,next);return true;
+}
+// An unshared trailing endpoint can be extended along its existing tangent.
+export function extensionStart(project,id){
+  const attached=project.segments.filter(s=>s.includes(id));
+  if(attached.length!==1)return null;
+  const other=attached[0].find(v=>v!==id);
+  return project.points.findIndex(p=>p.id===other)<project.points.findIndex(p=>p.id===id)?other:null;
+}
+export function extendControl(project,fromId,toId){
+  const startId=extensionStart(project,fromId);
+  if(!startId||fromId===toId)return false;
+  const rows=calculate(project),a=rows.find(r=>r.id===startId),b=rows.find(r=>r.id===fromId),target=rows.find(r=>r.id===toId);
+  if(!target||target.index<=a.index)return false;
+  const ya=a.measured+project.controls[a.id],yb=b.measured+project.controls[b.id];
+  const lift=ya+(yb-ya)*(target.index-a.index)/(b.index-a.index)-target.measured;
+  if(!Number.isFinite(lift)||Math.abs(lift)>Number.MAX_SAFE_INTEGER)return false;
+  if(!moveControl(project,fromId,toId))return false;
+  // Do not round: rounding here would change the original gradient.
+  project.controls[toId]=lift;
+  project.pendingControl=toId;
+  pruneControls(project);
+  return true;
 }
 export function format(value, digits = 0, missing = '未设计') {
   if (value === null || value === undefined) return missing;

@@ -96,6 +96,20 @@ app.whenReady().then(async()=>{
  w.setSize(1440,960);await delay();
  await js(`document.getElementById('controls').scrollTop=document.getElementById('controls').scrollHeight`);
  await require('node:fs/promises').writeFile('/tmp/railway-v17-preview.png',(await w.webContents.capturePage()).toPNG());
+ await js(`document.getElementById('clear').click();document.querySelector('[data-select="p1"]').click();document.querySelector('[data-select="p10"]').click();document.getElementById('controls').scrollTop=0;`);
+ await drag(await point(1,true),await point(19),false,async()=>{
+  assert.deepEqual(await selected(),['p1','p20']);
+  assert.notEqual(await js(`document.querySelector('[data-row="p20"]').children[8].textContent`),'未设计');
+ });
+ assert.equal(await js(`document.querySelector('#chart [data-pending]').getAttribute('data-pending')`),'p20');
+ await js(`document.querySelector('[data-select="p40"]').click()`);
+ assert.equal(await js(`document.querySelectorAll('[data-segment]').length`),2);
+ assert.deepEqual(await selected(),['p1','p20','p40']);
+ const beforeExtensionCancel=await snapshot();
+ await drag(await point(2,true),await point(44),true);
+ assert.deepEqual(await snapshot(),beforeExtensionCancel);
+ await js(`document.getElementById('controls').scrollTop=0;`);
+ await require('node:fs/promises').writeFile('/tmp/railway-v18-preview.png',(await w.webContents.capturePage()).toPNG());
  console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal, shared endpoint selection highlight, stable layout at 1440/1000 widths, segment focus without data mutation, no horizontal overflow');
  app.exit(0);
  }catch(e){console.error(e);app.exit(1);}

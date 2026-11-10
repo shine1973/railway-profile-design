@@ -2,7 +2,7 @@
 import {mkdtemp,writeFile,readFile,mkdir,rm} from 'node:fs/promises';
 import os from 'node:os';import path from 'node:path';import {spawnSync} from 'node:child_process';
 import assert from 'node:assert/strict';import ExcelJS from 'exceljs';import JSZip from 'jszip';
-import {newProject,calculate} from '../src/core.js';import {exportWorkbook} from '../desktop/workbook.js';
+import {newProject,calculate,extendControl,pickEndpoint} from '../src/core.js';import {exportWorkbook} from '../desktop/workbook.js';
 const dir=await mkdtemp(path.join(os.tmpdir(),'railway-formulas-'));
 try{
  const p=newProject(Array.from({length:101},(_,i)=>({id:`p${i}`,sourceRow:i+2,no:i-2,feature:'',fore:i<=20?1000:i<=70?800:900,back:i===20?800:i===70?900:null})));
@@ -17,10 +17,12 @@ try{
  await writeFile(path.join(dir,'changed.xlsx'),await clearCaches(z));
  const pair=structuredClone(p);pair.controls={p0:200,p20:128,p70:70,p100:178};pair.segments=[['p0','p20'],['p70','p100']];pair.curves={'p0~p20~p70~p100':10000};
  await writeFile(path.join(dir,'pair.xlsx'),await clearCaches(await JSZip.loadAsync(await exportWorkbook(pair,{formulas:true}))));
+ const extended=structuredClone(p);extended.controls={p0:0,p7:2};extended.segments=[['p0','p7']];extended.curves={};extendControl(extended,'p7','p12');pickEndpoint(extended,'p100');
+ await writeFile(path.join(dir,'extended.xlsx'),await clearCaches(await JSZip.loadAsync(await exportWorkbook(extended,{formulas:true}))));
  const out=path.join(dir,'out');await mkdir(out);
- const result=spawnSync(process.env.SOFFICE||'soffice',[`-env:UserInstallation=file://${dir}/profile`,'--headless','--convert-to','xlsx','--outdir',out,path.join(dir,'base.xlsx'),path.join(dir,'changed.xlsx'),path.join(dir,'pair.xlsx')],{encoding:'utf8',timeout:90000});
+ const result=spawnSync(process.env.SOFFICE||'soffice',[`-env:UserInstallation=file://${dir}/profile`,'--headless','--convert-to','xlsx','--outdir',out,path.join(dir,'base.xlsx'),path.join(dir,'changed.xlsx'),path.join(dir,'pair.xlsx'),path.join(dir,'extended.xlsx')],{encoding:'utf8',timeout:90000});
  assert.equal(result.status,0,result.stderr||result.error?.message);console.log(result.stdout.trim());
- for(const [name,project] of [['base',p],['changed',changed],['pair',pair]]){
+ for(const [name,project] of [['base',p],['changed',changed],['pair',pair],['extended',extended]]){
   const book=new ExcelJS.Workbook();await book.xlsx.load(await readFile(path.join(out,name+'.xlsx')));const sheet=book.getWorksheet('测量数据');
   for(const r of calculate(project))for(const [col,key] of [['E','instrument'],['F','measured'],['G','design'],['H','slope'],['I','increment'],['J','lift'],['K','radius']]){
    if(r[key]===null)continue;const cell=sheet.getCell(`${col}${r.index+2}`),actual=cell.result??cell.value;
