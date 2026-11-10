@@ -10,19 +10,26 @@ app.whenReady().then(async()=>{
  await js(`document.querySelector('[data-select="p1"]').click();document.querySelector('[data-select="p20"]').click();var lift=document.querySelector('[data-lift="p1"]');lift.value='10';lift.dispatchEvent(new Event('change'));`);await delay();
  const selected=()=>js(`Array.from(document.querySelectorAll('[data-select]:checked')).map(x=>x.dataset.select)`);
  const point=async(n,control=false)=>js(`(()=>{const svg=document.getElementById('chart'),r=svg.getBoundingClientRect(),c=svg.querySelectorAll('circle[r="${control?6:3}"]')[${n}];return {x:Math.round(r.left+Number(c.getAttribute('cx'))),y:Math.round(r.top+Number(c.getAttribute('cy')))};})()`);
- const drag=async(a,b,cancel=false)=>{
+ const drag=async(a,b,cancel=false,during=null)=>{
  w.webContents.sendInputEvent({type:'mouseMove',...a});w.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...a});
  w.webContents.sendInputEvent({type:'mouseMove',...b});await delay();
+ if(during)await during();
  if(cancel){w.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'});w.webContents.sendInputEvent({type:'keyUp',keyCode:'Escape'});}
  w.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...b});await delay();
  };
- await drag(await point(0,true),await point(4));
+ const snapshot=()=>js(`({path:document.querySelector('#chart path[stroke="#df9e3d"]').getAttribute('d'),rows:document.getElementById('rows').textContent,stats:document.querySelector('.stats').textContent})`);
+ const initial=await snapshot();
+ await drag(await point(0,true),await point(4),false,async()=>{
+   assert.deepEqual(await selected(),['p5','p20']);
+   const live=await snapshot();assert.notEqual(live.path,initial.path);assert.notEqual(live.rows,initial.rows);assert.notEqual(live.stats,initial.stats);
+ });
  assert.deepEqual(await selected(),['p5','p20']);
  assert.equal(await js(`document.querySelector('[data-lift="p5"]').value`),'10');
  await js(`document.getElementById('undo').click()`);assert.deepEqual(await selected(),['p1','p20']);
  await js(`document.getElementById('redo').click()`);assert.deepEqual(await selected(),['p5','p20']);
  await drag(await point(0,true),await point(19));assert.deepEqual(await selected(),['p5','p20']);
- await drag(await point(0,true),await point(8),true);assert.deepEqual(await selected(),['p5','p20']);
+ const beforeCancel=await snapshot();
+ await drag(await point(0,true),await point(8),true,async()=>{assert.notDeepEqual(await snapshot(),beforeCancel);});assert.deepEqual(await selected(),['p5','p20']);assert.deepEqual(await snapshot(),beforeCancel);
  await drag(await point(0,true),await point(2));assert.deepEqual(await selected(),['p3','p20']);
  await js(`document.getElementById('chart').dispatchEvent(new WheelEvent('wheel',{deltaY:-350,clientX:500,clientY:300,bubbles:true,cancelable:true}))`);await delay();
  const before=await point(0);

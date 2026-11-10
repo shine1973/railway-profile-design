@@ -5,18 +5,18 @@ const labelMeasure=document.createElement('canvas').getContext('2d');
 labelMeasure.font='11px -apple-system, BlinkMacSystemFont, Segoe UI, Microsoft YaHei, sans-serif';
 const $=id=>document.getElementById(id), api=window.desktop;
 let history=new History(newProject()), saved=JSON.stringify(history.current), results=[], view=null, pan=null, busy=false;
-const project=()=>history.current;
+const project=()=>pan?.preview??history.current;
 const escape=s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 function status(text){$('status').textContent=text;}
 function message(text,title='请检查'){ $('messageTitle').textContent=title;$('messageText').textContent=text;$('message').showModal(); }
 $('messageClose').onclick=()=>$('message').close();
-function dirty(){return JSON.stringify(project())!==saved;}
+function dirty(){return JSON.stringify(history.current)!==saved;}
 function mutate(fn){const p=structuredClone(project());fn(p);history.change(p);render();}
 async function replaceAllowed(){
   if(!dirty())return true;
   return new Promise(resolve=>{const d=$('confirm');d.showModal();$('cancelReplace').onclick=()=>{d.close();resolve(false);};$('acceptReplace').onclick=()=>{d.close();resolve(true);};d.oncancel=()=>resolve(false);});
 }
-async function action(fn){if(busy)return;busy=true;try{await fn();}catch(e){message(e.message);}finally{busy=false;render();}}
+async function action(fn){if(busy||pan)return;busy=true;try{await fn();}catch(e){message(e.message);}finally{busy=false;render();}}
 async function request(method,...args){if(!api)throw new Error('请在桌面应用中使用此功能');const r=await api[method](...args);if(!r.ok)throw new Error(r.error);return r.value;}
 $('import').onclick=()=>action(async()=>{
   if(!await replaceAllowed())return;
@@ -133,9 +133,9 @@ function drawChart(){
   if(pan?.controlId&&pan.moved){
     const target=results.find(r=>r.id===pan.targetId);
     if(target){
-      const occupied=target.id!==pan.controlId&&Object.hasOwn(project().controls,target.id);
+      const occupied=target.id!==pan.controlId&&Object.hasOwn(pan.original.controls,target.id);
       const color=occupied?'#d4374f':'#d99432';
-      const cy=y(target.measured+project().controls[pan.controlId]);
+      const cy=y(target.measured+pan.lift);
       svg.append(node('line',{x1:x(target.index+1),y1:top,x2:x(target.index+1),y2:height-bottom,stroke:color,'stroke-dasharray':'4 4','pointer-events':'none'}));
       svg.append(node('circle',{cx:x(target.index+1),cy,r:9,fill:'#fff7e9',stroke:color,'stroke-width':2,'stroke-dasharray':'3 2','pointer-events':'none'}));
     }
@@ -159,14 +159,14 @@ function controlHit(e){
 function cancelDrag(){
   const drag=pan;pan=null;$('chart').classList.remove('dragging');
   if(drag&&$('chart').hasPointerCapture(drag.pointerId))$('chart').releasePointerCapture(drag.pointerId);
-  if(drag?.controlId){drawChart();status('已取消移动控制点');}
+  if(drag?.controlId){render();status('已取消移动控制点');}
 }
 document.addEventListener('keydown',e=>{if(pan){if(e.key==='Escape'){e.preventDefault();cancelDrag();}}});
 $('chart').oncontextmenu=e=>e.preventDefault();
 $('chart').onpointerdown=e=>{
   if(!busy&&!pan&&(e.button===0||e.button===2)&&view){
     const control=e.button===0?controlHit(e):null;
-    pan={...coords(e),view:{...view},button:e.button,moved:false,pointerId:e.pointerId,controlId:control?.id,targetId:control?.id};
+    pan={...coords(e),view:{...view},button:e.button,moved:false,pointerId:e.pointerId,controlId:control?.id,targetId:control?.id,original:control?structuredClone(history.current):null,lift:control?history.current.controls[control.id]:null,preview:null};
     $('chart').setPointerCapture(e.pointerId);
   }
 };
@@ -175,12 +175,12 @@ $('chart').onpointerup=e=>{
   const drag=pan;pan=null;$('chart').classList.remove('dragging');
   if($('chart').hasPointerCapture(e.pointerId))$('chart').releasePointerCapture(e.pointerId);
   if(drag.controlId&&drag.moved){
-    const next=structuredClone(project());
+    const next=structuredClone(history.current);
     if(moveControl(next,drag.controlId,drag.targetId)){
       history.change(next);render();
       const target=results.find(r=>r.id===drag.targetId);
       status(`控制点已移至现场点号 ${target.no} · 记录序号 ${target.index+1}，起道量保持 ${format(next.controls[target.id])} mm`);
-    }else{drawChart();status(drag.targetId===drag.controlId?'控制点位置未改变':'目标位置已有控制点，本次移动未提交');}
+    }else{render();status(drag.targetId===drag.controlId?'控制点位置未改变':'目标位置已有控制点，本次移动未提交');}
   }else if(drag.button===0&&!drag.moved){const r=hit(e);if(r)toggle(r.id);}
 };
 $('chart').onpointercancel=cancelDrag;
@@ -195,8 +195,14 @@ $('chart').onpointermove=e=>{
         const sequence=pan.view.min+(c.x-g.left)/(g.width-g.left-g.right)*(pan.view.max-pan.view.min);
         const first=Math.max(1,Math.ceil(pan.view.min)),last=Math.min(results.length,Math.floor(pan.view.max));
         const target=results[Math.max(first,Math.min(last,Math.round(sequence)))-1];
+        const changed=target.id!==pan.targetId;
         pan.targetId=target.id;
-        const occupied=target.id!==pan.controlId&&Object.hasOwn(project().controls,target.id);
+        const occupied=target.id!==pan.controlId&&Object.hasOwn(pan.original.controls,target.id);
+        if(changed){
+          const preview=structuredClone(pan.original);
+          pan.preview=moveControl(preview,pan.controlId,target.id)?preview:null;
+          render();
+        }
         status(occupied?'目标位置已有控制点，松开将取消移动':`移至现场点号 ${target.no} · 记录序号 ${target.index+1}，松开确认，Esc取消`);
       }else{
         const dx=(c.x-pan.x)/(g.width-g.left-g.right)*(pan.view.max-pan.view.min);
