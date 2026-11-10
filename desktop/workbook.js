@@ -127,7 +127,6 @@ export async function exportWorkbook(rawProject, options = {}) {
   sheet.eachRow((row,i)=>{if(i>1){row.height=23;row.eachCell(c=>{c.font={name:'Microsoft YaHei',size:11};c.alignment={vertical:'middle',horizontal:'center'};if(i%2===0)c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F6F7'}};});}});
   rows.forEach((r,i)=>{if(r.lift!==null && r.lift<0) sheet.getCell(i+2,10).font={color:{argb:'FFDC3545'},bold:true};});
   sheet.addConditionalFormatting({ref:`J2:J${rows.length+1}`,rules:[{type:'cellIs',operator:'lessThan',formulae:['0'],priority:1,style:{font:{color:{argb:'FFDC3545'},bold:true}}}]});
-  sheet.autoFilter={from:'A1',to:`J${rows.length+1}`};
   sheet.pageSetup={orientation:'landscape',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'1:1'};
   const params = book.addWorksheet('参数');
   params.addRow(['累计距离（米）','记录序号','项目名称',project.name]);

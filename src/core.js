@@ -87,6 +87,12 @@ export function round(value, digits = 0) {
   const r = Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * scale) / scale;
   return Object.is(r, -0) ? 0 : r;
 }
+export function moveControl(project, fromId, toId) {
+  if(fromId===toId || !Object.hasOwn(project.controls,fromId) || Object.hasOwn(project.controls,toId) || !project.points.some(p=>p.id===toId))return false;
+  project.controls[toId]=project.controls[fromId];
+  delete project.controls[fromId];
+  return true;
+}
 export function format(value, digits = 0, missing = '未设计') {
   if (value === null || value === undefined) return missing;
   const r = round(value, digits);

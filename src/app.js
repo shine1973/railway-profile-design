@@ -1,4 +1,4 @@
-import {newProject,calculate,integer,format,History} from './core.js';
+import {newProject,calculate,integer,format,History,moveControl} from './core.js';
 import {fullView,clampView,zoomView,chartModel} from './chart-view.js';
 import {layoutLabels} from './chart-labels.js';
 const labelMeasure=document.createElement('canvas').getContext('2d');
@@ -42,7 +42,7 @@ $('undo').onclick=()=>{history.undo();render();};$('redo').onclick=()=>{history.
 $('clear').onclick=()=>mutate(p=>p.controls={});
 $('fit').onclick=()=>{view=null;drawChart();};
 ['labelNo','labelFeature','labelLift'].forEach(id=>$(id).onchange=drawChart);
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){if(e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?history.redo():history.undo();render();}if(e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}}});
+document.addEventListener('keydown',e=>{if(pan){if(e.key!=='Escape')e.preventDefault();return;}if((e.metaKey||e.ctrlKey)&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){if(e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?history.redo():history.undo();render();}if(e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}}});
 function toggle(id){mutate(p=>{if(Object.hasOwn(p.controls,id))delete p.controls[id];else p.controls[id]=0;});}
 function render(){
   results=calculate(project());
@@ -130,30 +130,78 @@ function drawChart(){
     annotations.append(text);
   }
 
+  if(pan?.controlId&&pan.moved){
+    const target=results.find(r=>r.id===pan.targetId);
+    if(target){
+      const occupied=target.id!==pan.controlId&&Object.hasOwn(project().controls,target.id);
+      const color=occupied?'#d4374f':'#d99432';
+      const cy=y(target.measured+project().controls[pan.controlId]);
+      svg.append(node('line',{x1:x(target.index+1),y1:top,x2:x(target.index+1),y2:height-bottom,stroke:color,'stroke-dasharray':'4 4','pointer-events':'none'}));
+      svg.append(node('circle',{cx:x(target.index+1),cy,r:9,fill:'#fff7e9',stroke:color,'stroke-width':2,'stroke-dasharray':'3 2','pointer-events':'none'}));
+    }
+  }
+
 }
 function coords(e){const r=$('chart').getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top};}
 function hit(e){if(!geometry)return null;const c=coords(e),g=geometry;let best=null,dist=Infinity;for(const r of results){const ys=[g.y(r.measured)];if(Object.hasOwn(project().controls,r.id))ys.push(g.y(r.measured+project().controls[r.id]));const d=Math.min(...ys.map(y=>Math.hypot(g.x(r.index+1)-c.x,y-c.y)));if(d<dist){best=r;dist=d;}}return dist<=16?best:null;}
+function controlHit(e){
+  if(!geometry)return null;
+  const c=coords(e),g=geometry;
+  if(c.x<g.left||c.x>g.width-g.right||c.y<g.top||c.y>g.height-g.bottom)return null;
+  let best=null,distance=12;
+  for(const r of results){
+    if(!Object.hasOwn(project().controls,r.id))continue;
+    const d=Math.hypot(g.x(r.index+1)-c.x,g.y(r.measured+project().controls[r.id])-c.y);
+    if(d<distance){best=r;distance=d;}
+  }
+  return best;
+}
+function cancelDrag(){
+  const drag=pan;pan=null;$('chart').classList.remove('dragging');
+  if(drag&&$('chart').hasPointerCapture(drag.pointerId))$('chart').releasePointerCapture(drag.pointerId);
+  if(drag?.controlId){drawChart();status('已取消移动控制点');}
+}
+document.addEventListener('keydown',e=>{if(pan){if(e.key==='Escape'){e.preventDefault();cancelDrag();}}});
 $('chart').oncontextmenu=e=>e.preventDefault();
 $('chart').onpointerdown=e=>{
-  if((e.button===0||e.button===2)&&view){
-    pan={...coords(e),view:{...view},button:e.button,moved:false};
+  if(!busy&&!pan&&(e.button===0||e.button===2)&&view){
+    const control=e.button===0?controlHit(e):null;
+    pan={...coords(e),view:{...view},button:e.button,moved:false,pointerId:e.pointerId,controlId:control?.id,targetId:control?.id};
     $('chart').setPointerCapture(e.pointerId);
   }
 };
 $('chart').onpointerup=e=>{
+  if(!pan||e.pointerId!==pan.pointerId)return;
   const drag=pan;pan=null;$('chart').classList.remove('dragging');
   if($('chart').hasPointerCapture(e.pointerId))$('chart').releasePointerCapture(e.pointerId);
-  if(drag&&drag.button===0&&!drag.moved){const r=hit(e);if(r)toggle(r.id);}
+  if(drag.controlId&&drag.moved){
+    const next=structuredClone(project());
+    if(moveControl(next,drag.controlId,drag.targetId)){
+      history.change(next);render();
+      const target=results.find(r=>r.id===drag.targetId);
+      status(`控制点已移至现场点号 ${target.no} · 记录序号 ${target.index+1}，起道量保持 ${format(next.controls[target.id])} mm`);
+    }else{drawChart();status(drag.targetId===drag.controlId?'控制点位置未改变':'目标位置已有控制点，本次移动未提交');}
+  }else if(drag.button===0&&!drag.moved){const r=hit(e);if(r)toggle(r.id);}
 };
-$('chart').onpointercancel=()=>{pan=null;$('chart').classList.remove('dragging');};
-$('chart').onlostpointercapture=()=>{pan=null;$('chart').classList.remove('dragging');};
+$('chart').onpointercancel=cancelDrag;
+$('chart').onlostpointercapture=cancelDrag;
 $('chart').onpointermove=e=>{
   if(pan&&geometry){
+    if(e.pointerId!==pan.pointerId)return;
     const c=coords(e),g=geometry;
     if(Math.hypot(c.x-pan.x,c.y-pan.y)>4)pan.moved=true;
     if(pan.moved){
-      const dx=(c.x-pan.x)/(g.width-g.left-g.right)*(pan.view.max-pan.view.min);
-      view=clampView({min:pan.view.min-dx,max:pan.view.max-dx},results.length);
+      if(pan.controlId){
+        const sequence=pan.view.min+(c.x-g.left)/(g.width-g.left-g.right)*(pan.view.max-pan.view.min);
+        const first=Math.max(1,Math.ceil(pan.view.min)),last=Math.min(results.length,Math.floor(pan.view.max));
+        const target=results[Math.max(first,Math.min(last,Math.round(sequence)))-1];
+        pan.targetId=target.id;
+        const occupied=target.id!==pan.controlId&&Object.hasOwn(project().controls,target.id);
+        status(occupied?'目标位置已有控制点，松开将取消移动':`移至现场点号 ${target.no} · 记录序号 ${target.index+1}，松开确认，Esc取消`);
+      }else{
+        const dx=(c.x-pan.x)/(g.width-g.left-g.right)*(pan.view.max-pan.view.min);
+        view=clampView({min:pan.view.min-dx,max:pan.view.max-dx},results.length);
+      }
       $('chart').classList.add('dragging');drawChart();$('tooltip').hidden=true;
     }
     return;

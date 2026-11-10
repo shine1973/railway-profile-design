@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseRows,newProject,calculate,validateProject,History,format} from '../src/core.js';
+import {parseRows,newProject,calculate,validateProject,History,format,moveControl} from '../src/core.js';
 const head=['特征点','点号','前视读数','后视读数'];
 function fixture(){return newProject(parseRows([head,['',-2,1200,null],['',-2,1250,800],['岔心',5,830,null],['',6,850,null]]));}
+test('移动控制点保留起道量、重复点号用记录标识、占用不覆盖、可撤销及保存',()=>{
+  const p=fixture();p.controls={p2:-5,p5:20};const h=new History(p),next=structuredClone(p);
+  assert.equal(moveControl(next,'p2','p3'),true);assert.deepEqual(next.controls,{p3:-5,p5:20});
+  assert.deepEqual(next.points,p.points);assert.equal(calculate(next)[1].lift,-5);
+  h.change(next);h.undo();assert.deepEqual(h.current,p);h.redo();assert.deepEqual(validateProject(JSON.parse(JSON.stringify(h.current))),next);
+  for(const id of ['p5','p3','missing'])assert.equal(moveControl(next,'p3',id),false);
+  assert.deepEqual(next.controls,{p3:-5,p5:20});
+  assert.equal(moveControl(next,'p3','p2'),true);assert.deepEqual(next.controls,p.controls);
+});
 test('统一假定高程与仪器高：多次转站、读数修改、旧项目重开',()=>{
   const p=fixture();p.points[2].back=400;p.points[3].fore=6000;p.controls={p2:0,p5:-20};
   for(const project of [p,validateProject(JSON.parse(JSON.stringify(p)))]) {

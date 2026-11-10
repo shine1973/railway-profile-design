@@ -51,6 +51,7 @@ test('导出十列、原始数据、负值样式、真实可编辑散点图与�
   const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);const s=book.getWorksheet('测量数据');
   assert.deepEqual(s.getRow(1).values.slice(1),['特征点','点号','前视读数','后视读数','仪器高','实测高程','设计高程','坡度','递增量','起道量']);
   calculate(p).forEach((r,i)=>{assert.equal(s.getCell(i+2,5).value,r.instrument);assert.equal(s.getCell(i+2,6).value,r.measured);assert.ok(r.measured>=10);});
+  assert.equal(s.autoFilter,undefined);assert.doesNotMatch(await (await JSZip.loadAsync(buffer)).file('xl/worksheets/sheet1.xml').async('string'),/<autoFilter/);
   assert.equal(s.getCell('G2').value,'未设计');assert.equal(s.getCell('J3').value,-5);assert.equal(s.getCell('J3').font.color.argb,'FFDC3545');assert.equal(s.getCell('H4').value,null);assert.equal(s.getCell('H3').numFmt,'0.0');assert.equal(s.getCell('A2').value,'<岔心>');
   const zip=await JSZip.loadAsync(buffer),chart=await zip.file('xl/charts/chart1.xml').async('string');
   assert.match(chart,/<c:scatterChart>/);assert.match(chart,/'测量数据'|&apos;测量数据&apos;/);assert.match(chart,/<c:dispBlanksAs val="gap"/);
