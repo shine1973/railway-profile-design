@@ -77,6 +77,19 @@ app.whenReady().then(async()=>{
  assert.equal(await js(`getComputedStyle(document.querySelector('.tablewrap')).overflowY`),'visible');
  await js(`document.getElementById('fit').click()`);
  assert.equal(await js(`document.getElementById('zoomLevel').textContent`),'1.00×');
+ await js(`document.getElementById('clear').click();for(const id of ['p1','p20','p20','p45'])document.querySelector('[data-select="'+id+'"]').click();`);
+ const straight=await snapshot();
+ await js(`var radius=document.querySelector('[data-radius="p20"]');radius.value='500';radius.dispatchEvent(new Event('change'));`);
+ assert.equal(await js(`document.getElementById('curveIssues').hidden`),true);
+ assert.notEqual((await snapshot()).rows,straight.rows);
+ await js(`document.getElementById('undo').click()`);assert.deepEqual(await snapshot(),straight);
+ await js(`document.getElementById('redo').click();var radius=document.querySelector('[data-radius="p20"]');radius.value='1000000';radius.dispatchEvent(new Event('change'));`);
+ assert.equal(await js(`document.getElementById('curveIssues').hidden`),false);
+ assert.equal(await js(`document.getElementById('export').disabled`),true);
+ await js(`document.getElementById('undo').click();document.getElementById('lineType').value='到发线';document.getElementById('lineType').dispatchEvent(new Event('change'));`);
+ assert.equal(await js(`document.querySelector('[data-radius="p20"]').value`),'500');
+ w.setSize(1440,960);await delay();
+ await require('node:fs/promises').writeFile('/tmp/railway-v16-preview.png',(await w.webContents.capturePage()).toPNG());
  console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal, shared endpoint selection highlight, stable layout at 1440/1000 widths, segment focus without data mutation, no horizontal overflow');
  app.exit(0);
  }catch(e){console.error(e);app.exit(1);}

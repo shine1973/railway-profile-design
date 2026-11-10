@@ -1,3 +1,4 @@
+import {junctions,curveGeometry,curveHeight} from './vertical-curves.js';
 import {newProject,calculate,integer,format,History,moveControl,pickEndpoint,removeControl,removeSegment,cancelPending} from './core.js';
 import {fullView,clampView,zoomView,chartModel} from './chart-view.js';
 import {layoutLabels} from './chart-labels.js';
@@ -31,7 +32,7 @@ $('open').onclick=()=>action(async()=>{
 });
 $('save').onclick=()=>action(async()=>{const snapshot=structuredClone(project());const file=await request('saveProject',snapshot);if(file){saved=JSON.stringify(snapshot);status(`已保存：${file}`);}});
 $('template').onclick=()=>action(async()=>{const file=await request('exportTemplate');if(file)status(`已导出填写模板：${file}`);});
-$('export').onclick=()=>action(async()=>{const file=await request('exportExcel',project(),{view,plotWidth:Math.max(100,($('chart').clientWidth||900)-86),labelNo:$('labelNo').checked,labelFeature:$('labelFeature').checked,labelLift:$('labelLift').checked});if(file)status(`已导出可编辑图表及成果：${file}`);});
+$('export').onclick=()=>action(async()=>{const file=await request('exportExcel',project(),{formulas:$('exportMode').value==='formulas',view,plotWidth:Math.max(100,($('chart').clientWidth||900)-86),labelNo:$('labelNo').checked,labelFeature:$('labelFeature').checked,labelLift:$('labelLift').checked});if(file)status(`已导出可编辑图表及成果：${file}`);});
 $('demo').onclick=()=>action(async()=>{
   if(!await replaceAllowed())return;
   const points=Array.from({length:45},(_,i)=>({id:`p${i+1}`,sourceRow:i+2,feature:i===0?'起点':i===17?'道岔尖轨':i===44?'终点':'',no:i-2,fore:1200+Math.round(i*3+32*Math.sin(i/5)),back:null}));
@@ -40,14 +41,23 @@ $('demo').onclick=()=>action(async()=>{
 $('projectName').onchange=e=>mutate(p=>{p.name=e.target.value.trim()||'未命名项目';});
 $('sleepers').onchange=e=>{try{const n=integer(e.target.value,'轨枕根数');if(n<1||n>1000)throw new Error('轨枕根数须在 1 至 1000 之间');view=null;mutate(p=>p.sleepers=n);}catch(err){message(err.message);e.target.value=project().sleepers;}};
 $('undo').onclick=()=>{history.undo();render();};$('redo').onclick=()=>{history.redo();render();};
-$('clear').onclick=()=>mutate(p=>{p.controls={};p.segments=[];p.pendingControl=null;});
+$('clear').onclick=()=>mutate(p=>{p.controls={};p.segments=[];p.pendingControl=null;p.curves={};});
 $('fit').onclick=()=>{view=null;drawChart();};
 ['labelNo','labelFeature','labelLift'].forEach(id=>$(id).onchange=drawChart);
 document.addEventListener('keydown',e=>{if(pan){if(e.key!=='Escape')e.preventDefault();return;}if((e.metaKey||e.ctrlKey)&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){if(e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?history.redo():history.undo();render();}if(e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}}});
 function toggle(id){try{mutate(p=>pickEndpoint(p,id));status(project().pendingControl?'已选第一个端点，请选择本段另一个端点':'坡段已完成，请重新选择下一段的两个端点');}catch(e){message(e.message);}}
 
+['lineType','speedBasis'].forEach(id=>$(id).onchange=e=>mutate(p=>p[id]=e.target.value));
+$('lineSpeed').onchange=e=>{const value=e.target.value===''?null:Number(e.target.value);if(value!==null&&(!Number.isFinite(value)||value<=0||value>500)){message('速度须大于0且不超过500 km/h');render();return;}mutate(p=>p.speed=value);};
 function render(){
+  const curvesPanel=$('curves');
   results=calculate(project());
+  $('lineType').value=project().lineType??'未指定';$('speedBasis').value=project().speedBasis??'允许速度';$('lineSpeed').value=project().speed??'';
+  const cg=curveGeometry(project(),results);
+  $('curveIssues').hidden=!cg.issues.length;
+  $('curveIssues').textContent=cg.issues.length?'竖曲线未应用（暂显示直坡，禁止导出）：'+cg.issues.join('；'):'';
+  $('curves').innerHTML='<h3 class="paneltitle">竖曲线 <span>圆曲线</span></h3><p class="hint">在共用端点填写半径启用，留空关闭。半径单位 m。暂无已核实的规范推荐值。<br>端点起道设置对应直坡交点；最终起道量见表格。</p>'+junctions(project()).map(j=>{const r=results.find(r=>r.id===j.id),c=cg.curves.find(c=>c.id===j.id);return `<div class="controlitem"><label>序号 ${r.index+1} · R <input data-radius="${j.id}" aria-label="序号 ${r.index+1} 竖曲线半径" type="number" min="0.001" max="10000000" step="any" placeholder="未设置" value="${project().curves?.[j.id]??''}"> m</label>${c?`<small>起点距 ${c.start.toFixed(2)} m · 终点距 ${c.end.toFixed(2)} m<br>弧长 ${c.length.toFixed(2)} m · ${c.sign>0?'凹形':'凸形'}</small>`:''}</div>`;}).join('');
+  document.querySelectorAll('[data-radius]').forEach(input=>input.onchange=()=>{const value=input.value===''?null:Number(input.value);if(value!==null&&(!Number.isFinite(value)||value<=0||value>10000000)){invalid(input,'半径须大于0且不超过10000000 m');return;}mutate(p=>{p.curves??={};if(value===null)delete p.curves[input.dataset.radius];else p.curves[input.dataset.radius]=value;});});
   $('projectName').value=project().name;$('sleepers').value=project().sleepers;$('spacing').textContent=(project().sleepers*.6).toFixed(1)+' m';
   const selected=Object.keys(project().controls), designed=results.filter(r=>r.design!==null), negative=designed.filter(r=>r.lift<0);
   $('pointCount').textContent=results.length||'—';$('controlCount').textContent=selected.length;$('controlBadge').textContent=selected.length;
@@ -55,7 +65,7 @@ function render(){
   $('negativeCount').textContent=negative.length;$('negativeCount').classList.toggle('negative',negative.length>0);
   $('saveState').textContent=dirty()?'● 未保存':results.length?'已保存':'尚未导入';
   api?.setDirty(dirty());
-  $('save').disabled=busy||!results.length;$('export').disabled=busy||!results.length;$('import').disabled=busy;$('open').disabled=busy;$('template').disabled=busy;
+  $('save').disabled=busy||!results.length;$('export').disabled=busy||!results.length||cg.issues.length>0;$('import').disabled=busy;$('open').disabled=busy;$('template').disabled=busy;
   $('undo').disabled=!history.past.length;$('redo').disabled=!history.future.length;$('clear').disabled=!selected.length;
   $('empty').hidden=results.length>0;
   $('controls').innerHTML='<h3 class=paneltitle>端点起道量 <span>mm</span></h3>'+(results.filter(r=>selected.includes(r.id)).map(r=>`<div class="controlitem ${r.id===project().pendingControl?'pendingcontrol':''}"><div class="top"><span>点号 ${r.no}${r.no!==r.index+1?` <small> / 序号 ${r.index+1}</small>`:''}</span><button data-remove="${r.id}" aria-label="取消控制点 ${r.no}">×</button></div><label>起道量 <input type="text" inputmode="numeric" aria-label="控制点 ${r.no} 起道量" data-lift="${r.id}" value="${project().controls[r.id]}" class="${project().controls[r.id]<0?'negative':''}"> mm</label></div>`).join('') || '<p class="hint">尚未选择控制点。<br>每次选择两个端点生成独立坡段。</p>');
@@ -66,6 +76,7 @@ function render(){
   $('selectionHint').title=$('selectionHint').textContent;
   const segmentRows=project().segments.map(([a,b],i)=>{const start=results.find(r=>r.id===a),end=results.find(r=>r.id===b);return `<div class="segmentitem"><span><b>坡段 ${i+1}</b><small>序号 ${start.index+1} — ${end.index+1}</small></span><div><button data-focus-segment="${i}" aria-label="定位坡段 ${i+1}">定位</button><button data-segment="${i}" aria-label="删除坡段 ${i+1}">删除</button></div></div>`;}).join('');
   $('controls').insertAdjacentHTML('afterbegin',`<div class="segmenthint">${pending?`已选序号 ${pending.index+1}，请选另一端 <button id="cancelPending">取消</button>`:'每次重新选两个端点，独立生成一段'}</div><h3 class="paneltitle">已建坡段 <span>${project().segments.length}</span></h3>${segmentRows||'<p class="hint">尚未创建坡段</p>'}`);
+  $('controls').append(curvesPanel);
   if($('cancelPending'))$('cancelPending').onclick=()=>mutate(cancelPending);
   document.querySelectorAll('[data-focus-segment]').forEach(b=>b.onclick=()=>{const ends=project().segments[Number(b.dataset.focusSegment)].map(id=>results.findIndex(r=>r.id===id)+1);const min=Math.min(...ends),max=Math.max(...ends),pad=Math.max(1,(max-min)*.1);view=clampView({min:min-pad,max:max+pad},results.length);drawChart();});
   document.querySelectorAll('[data-segment]').forEach(b=>b.onclick=()=>mutate(p=>removeSegment(p,Number(b.dataset.segment))));
@@ -124,6 +135,12 @@ function drawChart(){
   for(const [field,color] of [['measured','#27899a'],['design','#df9e3d']]){
     let d='',active=false,previous=null;for(const r of results){if(field==='design'&&previous?.slope===null)active=false;previous=r;if(r[field]===null){active=false;continue;}d+=`${active?'L':'M'}${x(r.index+1)},${y(r[field])} `;active=true;}
     group.append(node('path',{d,fill:'none',stroke:color,'stroke-width':field==='design'?2.5:1.8,'stroke-linejoin':'round'}));
+  }
+  const curveState=curveGeometry(project(),results);
+  if(!curveState.issues.length)for(const c of curveState.curves)for(const [distance,name] of [[c.start,'竖曲线起点'],[c.end,'竖曲线终点']]){
+    const sequence=distance/(project().sleepers*.6)+1;
+    const marker=node('circle',{cx:x(sequence),cy:y(curveHeight(c,distance)),r:4,fill:'#fff',stroke:'#df9e3d','stroke-width':1.5,'pointer-events':'none'});
+    marker.append(node('title',{},name+' · '+distance.toFixed(2)+' m'));group.append(marker);
   }
   for(const r of visible){
     const selected=Object.hasOwn(project().controls,r.id),negative=r.lift!==null&&r.lift<0;

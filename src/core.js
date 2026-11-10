@@ -1,3 +1,4 @@
+import {junctions,curveGeometry,curveHeight} from './vertical-curves.js';
 export const HEADERS = ['特征点', '点号', '前视读数', '后视读数'];
 export const blank = v => v === null || v === undefined || String(v).trim() === '';
 export function integer(value, label, optional = false) {
@@ -28,10 +29,10 @@ export function parseRows(rows) {
   return points;
 }
 export function newProject(points = [], name = '未命名项目') {
-  return {format: 'railway-profile', version: 2, name, sleepers: 6, points, controls: {}, segments: [], pendingControl: null};
+  return {format: 'railway-profile', version: 3, name, sleepers: 6, points, controls: {}, segments: [], pendingControl: null, curves: {}, lineType: '未指定', speed: null, speedBasis: '允许速度'};
 }
 export function validateProject(raw) {
-  if (!raw || raw.format !== 'railway-profile' || ![1,2].includes(raw.version)) throw new Error('不是受支持的线路拉坡项目（版本 1/2）');
+  if (!raw || raw.format !== 'railway-profile' || ![1,2,3].includes(raw.version)) throw new Error('不是受支持的线路拉坡项目（版本 1/2/3）');
   const sleepers = integer(raw.sleepers, '轨枕根数');
   if (sleepers < 1 || sleepers > 1000) throw new Error('轨枕根数应为 1 至 1000 的整数');
   if (!Array.isArray(raw.points) || raw.points.length > 10000) throw new Error('项目测点格式错误或超过 10000 点');
@@ -61,6 +62,18 @@ export function validateProject(raw) {
   if(!validSegments(project))throw new Error('坡段端点无效、重复或存在重叠');
   const used=new Set(project.segments.flat());if(project.pendingControl)used.add(project.pendingControl);
   if(Object.keys(controls).some(id=>!used.has(id)))throw new Error('控制点未关联坡段');
+  if(raw.version===3){
+    if(!raw.curves||typeof raw.curves!=='object'||Array.isArray(raw.curves))throw new Error('竖曲线参数无效');
+    const eligible=new Set(junctions(project).map(j=>j.id));
+    for(const [id,r] of Object.entries(raw.curves)){
+      if(!eligible.has(id)||typeof r!=='number'||!Number.isFinite(r)||r<=0||r>10000000)throw new Error('竖曲线半径或变坡点无效');
+      project.curves[id]=r;
+    }
+    if(!['未指定','区间正线','站内正线','到发线','其他站线'].includes(raw.lineType))throw new Error('线路类别无效');
+    if(raw.speed!==null&&(!Number.isFinite(raw.speed)||raw.speed<=0||raw.speed>500))throw new Error('速度须在0至500 km/h之间');
+    if(!['允许速度','设计速度'].includes(raw.speedBasis))throw new Error('速度依据无效');
+    Object.assign(project,{lineType:raw.lineType,speed:raw.speed,speedBasis:raw.speedBasis});
+  }
   return project;
 }
 export function calculate(project) {
@@ -83,6 +96,15 @@ export function calculate(project) {
       r.lift = r.design - r.measured;
       if (i < b.index) { r.increment = increment; r.slope = increment / step; }
     }
+  }
+  const geometry=curveGeometry(project,result);
+  if(!geometry.issues.length)for(const c of geometry.curves)for(const r of result){
+    if(r.distance>=c.start&&r.distance<=c.end)r.design=curveHeight(c,r.distance);
+  }
+  for(let i=0;i<result.length;i++){
+    const r=result[i];
+    if(r.design!==null)r.lift=r.design-r.measured;
+    if(r.slope!==null){r.increment=result[i+1].design-r.design;r.slope=r.increment/step;}
   }
   // A common assumed datum changes no height differences or lift settings.
   const minimum = result.reduce((min,r)=>Math.min(min,r.measured),0);
@@ -120,6 +142,8 @@ function validSegments(project) {
 function pruneControls(project){
   const used=new Set(project.segments.flat());if(project.pendingControl)used.add(project.pendingControl);
   for(const id of Object.keys(project.controls))if(!used.has(id))delete project.controls[id];
+  const eligible=new Set(junctions(project).map(j=>j.id));
+  for(const id of Object.keys(project.curves??{}))if(!eligible.has(id))delete project.curves[id];
 }
 export function cancelPending(project){project.pendingControl=null;pruneControls(project);}
 export function pickEndpoint(project,id){
@@ -145,6 +169,9 @@ export function moveControl(project,fromId,toId){
   const next={...project,controls:{...project.controls,[toId]:project.controls[fromId]},segments:project.segments.map(s=>s.map(id=>id===fromId?toId:id)),pendingControl:project.pendingControl===fromId?toId:project.pendingControl};
   delete next.controls[fromId];
   if(!validSegments(next))return false;
+  next.curves={...project.curves};
+  if(Object.hasOwn(next.curves,fromId)){next.curves[toId]=next.curves[fromId];delete next.curves[fromId];}
+  pruneControls(next);
   Object.assign(project,next);return true;
 }
 export function format(value, digits = 0, missing = '未设计') {

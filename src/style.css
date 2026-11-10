@@ -36,3 +36,6 @@ footer{display:flex;justify-content:space-between;color:var(--muted);font-size:1
 @media(max-width:1150px){header{gap:20px;padding:0 16px}.brand{min-width:170px}.offline{display:none}.actions button{padding:7px 10px}main{padding:14px 16px}.workspace{grid-template-columns:minmax(0,1fr) 260px;gap:12px}.stats>div{padding:0 12px}.chartfoot>span,.sectionnote{display:none}.sectionhead{gap:10px;padding:10px 12px}.legend{gap:9px}th,td{padding-left:7px;padding-right:7px}#projectName{width:275px}.chartfoot{padding:10px 12px}.zoomtools{padding:6px 12px}.zoomtools input{width:70px}}
 
 .manualbutton{margin-left:auto;font-size:12px;background:transparent;border-color:transparent;color:var(--accent)}.manualbutton+.offline{margin-left:0}@media(max-width:1150px){header{gap:12px}.brand{min-width:158px}.actiongroup+.actiongroup{padding-left:10px;margin-left:2px}.manualbutton{padding:7px 8px}}
+/* Design metadata and curve inputs share the existing quiet form treatment. */
+select{font:inherit;color:inherit;background:#fff;border:1px solid #dce5e9;border-radius:6px;padding:7px 9px;max-width:100%}
+#lineSpeed{width:78px}#curves{margin-top:20px}#curves input{width:100px}#curves small{display:block;color:#68808c;line-height:1.6;margin-top:8px}#curveIssues{padding:12px 18px;margin:12px 0;background:#fff0f2;border:1px solid #efc4cc;border-radius:8px}

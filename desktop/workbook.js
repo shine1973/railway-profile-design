@@ -1,3 +1,5 @@
+import {addFormulas} from './formulas.js';
+import {curveGeometry} from '../src/vertical-curves.js';
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import {HEADERS, parseRows, newProject, validateProject, calculate, format, designSegments} from '../src/core.js';
@@ -88,7 +90,7 @@ function rich(text,color='446774') {
   return `<c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="zh-CN" sz="1000"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></a:rPr><a:t>${xml(text)}</a:t></a:r></a:p></c:rich></c:tx>`;
 }
 function labels(items,position='t') {
-  return `<c:dLbls>${items.map(({index,text,negative})=>`<c:dLbl><c:idx val="${index}"/>${rich(text,negative?'D4374F':'446774')}<c:dLblPos val="${position}"/><c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/></c:dLbl>`).join('')}<c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/></c:dLbls>`;
+  return `<c:dLbls>${items.map(({index,text,negative,formula})=>`<c:dLbl><c:idx val="${index}"/>${formula?`<c:tx><c:strRef><c:f>${xml(formula)}</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${xml(text)}</c:v></c:pt></c:strCache></c:strRef></c:tx>`:rich(text,negative?'D4374F':'446774')}<c:dLblPos val="${position}"/><c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/></c:dLbl>`).join('')}<c:showLegendKey val="0"/><c:showVal val="0"/><c:showCatName val="0"/><c:showSerName val="0"/></c:dLbls>`;
 }
 function series(i,name,color,rows,formula,values,{marker=false,annotations=[],negative=false,line=true,xFormula=null,xValues=null}={}) {
   const style=`<c:spPr><a:ln w="${i===1?23813:17145}">${line?`<a:solidFill><a:srgbClr val="${color}"/></a:solidFill>`:'<a:noFill/>'}</a:ln></c:spPr>`;
@@ -112,8 +114,10 @@ function sequenceGrid(model) {
 export async function exportWorkbook(rawProject, options = {}) {
   const project = validateProject(rawProject), rows = calculate(project);
   if (!rows.length) throw new Error('请先导入测量数据');
+  const geometry=curveGeometry(project,rows);
+  if(geometry.issues.length)throw new Error(geometry.issues.join('\n'));
   const model=chartModel(rows,project.controls,options);
-  const annotations=rows.filter(r=>r.index+1>=model.view.min&&r.index+1<=model.view.max).map(r=>({index:r.index,text:[options.labelNo?String(r.no):'',options.labelFeature!==false?r.feature:'',options.labelLift&&r.lift!==null?format(r.lift)+' mm':''].filter(Boolean).join(' · '),negative:r.lift!==null&&r.lift<0})).filter(r=>r.text);
+  const annotations=rows.filter(r=>r.index+1>=model.view.min&&r.index+1<=model.view.max).map(r=>({index:r.index,text:[options.labelNo?String(r.no):'',options.labelFeature!==false?r.feature:'',options.labelLift&&r.lift!==null?format(r.lift)+' mm':''].filter(Boolean).join(' · '),negative:r.lift!==null&&r.lift<0,formula:options.formulas?`'参数'!$R$${r.index+2}`:null})).filter(r=>r.text);
   const book = new ExcelJS.Workbook();
   book.creator = '线路拉坡'; book.created = new Date();
   const sheet = book.addWorksheet('测量数据', {views: [{state:'frozen',ySplit:1,xSplit:2}]});
@@ -127,7 +131,7 @@ export async function exportWorkbook(rawProject, options = {}) {
   sheet.getRow(1).alignment={vertical:'middle',horizontal:'center'};
   sheet.getRow(1).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'},size:11};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF173A48'}};});
   sheet.eachRow((row,i)=>{if(i>1){row.height=23;row.eachCell(c=>{c.font={name:'Microsoft YaHei',size:11};c.alignment={vertical:'middle',horizontal:'center'};if(i%2===0)c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F6F7'}};});}});
-  rows.forEach((r,i)=>{if(r.lift!==null && r.lift<0) sheet.getCell(i+2,10).font={color:{argb:'FFDC3545'},bold:true};});
+  rows.forEach((r,i)=>{if(!options.formulas && r.lift!==null && r.lift<0) sheet.getCell(i+2,10).font={color:{argb:'FFDC3545'},bold:true};});
   sheet.addConditionalFormatting({ref:`J2:J${rows.length+1}`,rules:[{type:'cellIs',operator:'lessThan',formulae:['0'],priority:1,style:{font:{color:{argb:'FFDC3545'},bold:true}}}]});
   sheet.pageSetup={orientation:'landscape',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'1:1'};
   const params = book.addWorksheet('参数');
@@ -161,10 +165,14 @@ export async function exportWorkbook(rawProject, options = {}) {
   params.getCell('P1').value='坡段起点序号';params.getCell('Q1').value='坡段终点序号';
   designSegments(project).forEach(([a,b],i)=>{params.getCell(i+2,16).value=rows.find(r=>r.id===a).index+1;params.getCell(i+2,17).value=rows.find(r=>r.id===b).index+1;});
   params.columns.forEach(c=>c.width=25);
+  if(options.formulas)addFormulas(book,project,rows,model,options);
+  else if(geometry.curves.length){const curveSheet=book.addWorksheet('竖曲线参数');curveSheet.addRow(['变坡点序号','半径 m','起点距离 m','终点距离 m','弧长 m']);geometry.curves.forEach(c=>curveSheet.addRow([rows.find(r=>r.id===c.id).index+1,c.radius,c.start,c.end,c.length]));curveSheet.columns.forEach(c=>c.width=22);}
+
   const zip=await JSZip.loadAsync(await book.xlsx.writeBuffer());
-  const measuredFormula=model.offset?`'参数'!$F$2:$F$${rows.length+1}`:`'测量数据'!$F$2:$F$${rows.length+1}`;
+  const measuredFormula=(model.offset||options.formulas)?`'参数'!$F$2:$F$${rows.length+1}`:`'测量数据'!$F$2:$F$${rows.length+1}`;
   const designFormula=`'参数'!$O$2:$O$${designPoints.length+1}`;
-  const chart=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="${ns}/drawingml/2006/chart" xmlns:a="${ns}/drawingml/2006/main"><c:lang val="zh-CN"/><c:chart><c:title>${title('纵断面对比'+(model.offset?`（图示高程额外偏移 +${model.offset} mm）`:''))}</c:title><c:plotArea>${layout(.1,.16,.85,.6,true)}<c:scatterChart><c:scatterStyle val="lineMarker"/>${series(0,'实测','27899A',rows,measuredFormula,rows.map(r=>r.measured+model.offset),{marker:true,annotations,negative:true})}${series(1,'设计','DF9E3D',rows,designFormula,designPoints.map(p=>p.value),{xFormula:`'参数'!$N$2:$N$${designPoints.length+1}`,xValues:designPoints.map(p=>p.sequence)})}${series(2,'控制点','D99432',rows,`'参数'!$H$2:$H$${rows.length+1}`,rows.map(r=>Object.hasOwn(project.controls,r.id)?r.measured+project.controls[r.id]+model.offset:null),{marker:true,line:false})}${sequenceGrid(model)}<c:axId val="100"/><c:axId val="200"/></c:scatterChart>${axis(100,200,'b','记录序号',model.view,1)}${axis(200,100,'l','图示高程（mm）',model.axis,model.axis.step)}</c:plotArea><c:legend><c:legendPos val="b"/><c:legendEntry><c:idx val="3"/><c:delete val="1"/></c:legendEntry>${layout(.3,.92,.4,.05)}<c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
+  const chartTitle=options.formulas?`<c:tx><c:strRef><c:f>'参数'!$S$2</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${xml(model.offset?`纵断面对比（图示高程额外偏移 +${model.offset} mm）`:'纵断面对比')}</c:v></c:pt></c:strCache></c:strRef></c:tx><c:overlay val="0"/>`:title('纵断面对比'+(model.offset?`（图示高程额外偏移 +${model.offset} mm）`:''));
+  const chart=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="${ns}/drawingml/2006/chart" xmlns:a="${ns}/drawingml/2006/main"><c:lang val="zh-CN"/><c:chart><c:title>${chartTitle}</c:title><c:plotArea>${layout(.1,.16,.85,.6,true)}<c:scatterChart><c:scatterStyle val="lineMarker"/>${series(0,'实测','27899A',rows,measuredFormula,rows.map(r=>r.measured+model.offset),{marker:true,annotations,negative:!options.formulas})}${series(1,'设计','DF9E3D',rows,designFormula,designPoints.map(p=>p.value),{xFormula:`'参数'!$N$2:$N$${designPoints.length+1}`,xValues:designPoints.map(p=>p.sequence)})}${series(2,'控制点','D99432',rows,`'参数'!$H$2:$H$${rows.length+1}`,rows.map(r=>Object.hasOwn(project.controls,r.id)?r.measured+project.controls[r.id]+model.offset:null),{marker:true,line:false})}${sequenceGrid(model)}${options.formulas?series(4,'负起道量','D4374F',rows,`'计算过程'!$E$2:$E$${rows.length+1}`,rows.map(r=>r.lift!==null&&r.lift<0?r.measured+model.offset:null),{marker:true,line:false}):''}<c:axId val="100"/><c:axId val="200"/></c:scatterChart>${axis(100,200,'b','记录序号',model.view,1)}${axis(200,100,'l','图示高程（mm）',model.axis,model.axis.step)}</c:plotArea><c:legend><c:legendPos val="b"/><c:legendEntry><c:idx val="3"/><c:delete val="1"/></c:legendEntry>${layout(.3,.92,.4,.05)}<c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
   zip.file('xl/charts/chart1.xml',chart);
   zip.file('xl/drawings/drawing1.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="${ns}/drawingml/2006/spreadsheetDrawing" xmlns:a="${ns}/drawingml/2006/main"><xdr:twoCellAnchor><xdr:from><xdr:col>10</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>27</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>25</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="纵断面对比图"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="${ns}/drawingml/2006/chart"><c:chart xmlns:c="${ns}/drawingml/2006/chart" xmlns:r="${ns}/officeDocument/2006/relationships" r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`);
   const rel=(type,target)=>`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${ns}/package/2006/relationships"><Relationship Id="rId1" Type="${ns}/officeDocument/2006/relationships/${type}" Target="${target}"/></Relationships>`;
