@@ -69,7 +69,15 @@ app.whenReady().then(async()=>{
  const compact=await positions();
  await js(`document.querySelector('[data-select="p4"]').click()`);assert.deepEqual(await positions(),compact);
  await js(`document.getElementById('cancelPending').click()`);assert.deepEqual(await positions(),compact);
- console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal, shared endpoint selection highlight, stable layout at 1440/1000 widths');
+ const beforeFocus=await js(`({rows:document.getElementById('rows').textContent,stats:document.querySelector('.stats').textContent})`);
+ await js(`document.querySelector('[data-focus-segment="1"]').click()`);await delay();
+ assert.ok(Number(await js(`document.getElementById('zoomLevel').textContent.replace('×','')`))>1);
+ assert.deepEqual(await js(`({rows:document.getElementById('rows').textContent,stats:document.querySelector('.stats').textContent})`),beforeFocus);
+ assert.equal(await js(`document.documentElement.scrollWidth<=window.innerWidth`),true);
+ assert.equal(await js(`getComputedStyle(document.querySelector('.tablewrap')).overflowY`),'visible');
+ await js(`document.getElementById('fit').click()`);
+ assert.equal(await js(`document.getElementById('zoomLevel').textContent`),'1.00×');
+ console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal, shared endpoint selection highlight, stable layout at 1440/1000 widths, segment focus without data mutation, no horizontal overflow');
  app.exit(0);
  }catch(e){console.error(e);app.exit(1);}
 });
