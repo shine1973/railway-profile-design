@@ -36,8 +36,8 @@ export function curveHeight(c,x) {
   return (c.startY+c.sign*(u*u-u0*u0)/(q+q0))*1000;
 }
 
-// Geometry-only starting value: reserve 20% of the available tangent space,
-// then round down to two significant digits. This is not a standards check.
+// Geometry-only limit and a rounded-down usable value. No percentage discount.
+// Values are whole metres, with at most two significant digits; not a standards check.
 export function recommendRadius(project,rows,id){
   const candidates=junctions(project),position=candidates.findIndex(j=>j.id===id);
   if(position<0)return {reason:'请先建立前后两个坡段'};
@@ -48,12 +48,13 @@ export function recommendRadius(project,rows,id){
   let left=current.from,right=current.to;
   for(const c of other.curves){const index=candidates.findIndex(j=>j.id===c.id);if(index<position)left=Math.max(left,c.end);else right=Math.min(right,c.start);}
   const t1=Math.atan(current.m1),t2=Math.atan(current.m2),k=Math.tan(Math.abs(t2-t1)/2);
-  const maximum=Math.min((current.x-left)/(k*Math.cos(t1)),(right-current.x)/(k*Math.cos(t2)),10000000);
+  const maximum=Math.min((current.x-left)/(k*Math.cos(t1)),(right-current.x)/(k*Math.cos(t2)));
   if(!Number.isFinite(maximum)||maximum<.001)return {reason:'交点两侧没有足够空间，请调整坡段'};
-  const target=maximum*.8,unit=10**(Math.floor(Math.log10(target))-1);
+  if(maximum<1)return {maximum,reason:'可容纳最大半径不足1 m，没有正整数几何可用值；仍可手动填写小数'};
+  const target=Math.min(maximum,10000000),unit=10**Math.max(0,Math.floor(Math.log10(target))-1);
   const radius=Number((Math.floor(target/unit)*unit).toPrecision(12));
   if(radius<.001)return {reason:'可用空间过小，请调整坡段'};
   const check=curveGeometry({...project,curves:{...project.curves,[id]:radius}},rows);
   if(check.issues.length)return {reason:'当前坡段组合存在几何冲突'};
-  return {radius,maximum,start:current.x-radius*k*Math.cos(t1),end:current.x+radius*k*Math.cos(t2)};
+  return {radius,maximum,inputLimit:10000000,start:current.x-radius*k*Math.cos(t1),end:current.x+radius*k*Math.cos(t2)};
 }

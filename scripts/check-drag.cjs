@@ -125,6 +125,9 @@ app.whenReady().then(async()=>{
  await js(`document.getElementById('measurementDate').value='2026-11-10';document.getElementById('measurementDate').dispatchEvent(new Event('change'));document.getElementById('measurementLocation').value='演示测量地点';document.getElementById('measurementLocation').dispatchEvent(new Event('change'));document.querySelector('[data-recommend]').click();`);
  assert.equal(await js(`document.getElementById('curveIssues').hidden`),true);
  assert.ok(Number(await js(`document.querySelector('[data-radius]').value`))>0);
+ assert.match(await js(`document.getElementById('curves').textContent`),/可容纳最大半径/);
+ assert.match(await js(`document.getElementById('curves').textContent`),/几何可用值/);
+ assert.doesNotMatch(await js(`document.getElementById('curves').textContent`),/80%|几何建议|采用建议/);
  assert.equal(await js(`document.getElementById('measurementDate').value`),'2026-11-10');
  await js(`document.getElementById('controls').scrollTop=document.getElementById('controls').scrollHeight`);
  await require('node:fs/promises').writeFile('/tmp/railway-v20-preview.png',(await w.webContents.capturePage()).toPNG());

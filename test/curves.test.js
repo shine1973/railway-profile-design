@@ -64,7 +64,7 @@ test('连续两处竖曲线不覆盖前一处已计算弧段，平行坡线拒�
 
 test('几何建议不依赖速度，采用后有效且避让相邻竖曲线，平行不给推荐',()=>{
  const p=curveFixture();p.curves={};const rows=calculate(p),before=structuredClone(p),s=recommendRadius(p,rows,'p50');
- assert.ok(s.radius>0&&s.radius<=s.maximum*.8+1e-8);assert.deepEqual(p,before);
+ assert.ok(s.radius>0&&s.radius<=s.maximum);assert.ok(Number.isInteger(s.radius));assert.ok(s.radius>s.maximum*.8);assert.deepEqual(p,before);
  p.speed=350;p.lineType='区间正线';assert.deepEqual(recommendRadius(p,rows,'p50'),s);
  p.curves.p50=s.radius;assert.deepEqual(curveGeometry(p,calculate(p)).issues,[]);
  p.controls={p0:180,p30:0,p60:180,p100:0};p.segments=[['p0','p30'],['p30','p60'],['p60','p100']];p.curves={};
