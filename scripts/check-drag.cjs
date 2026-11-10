@@ -102,9 +102,20 @@ app.whenReady().then(async()=>{
   assert.notEqual(await js(`document.querySelector('[data-row="p20"]').children[8].textContent`),'未设计');
  });
  assert.equal(await js(`document.querySelector('#chart [data-pending]').getAttribute('data-pending')`),'p20');
+ const pendingLift=await js(`document.querySelector('[data-lift="p20"]').value`);
+ await drag(await point(1,true),await point(24),false,async()=>{
+   assert.deepEqual(await selected(),['p1','p25']);
+   assert.equal(await js(`document.querySelector('[data-lift="p25"]').value`),pendingLift);
+   assert.equal(await js(`document.querySelector('#chart [data-pending]').getAttribute('data-pending')`),'p25');
+ });
+ assert.equal(await js(`document.querySelector('[data-lift="p25"]').value`),pendingLift);
+ assert.equal(await js(`document.querySelector('#chart [data-pending]').getAttribute('data-pending')`),'p25');
+ await js(`document.getElementById('undo').click()`);
+ assert.equal(await js(`document.querySelector('#chart [data-pending]').getAttribute('data-pending')`),'p20');
+ await js(`document.getElementById('redo').click()`);
  await js(`document.querySelector('[data-select="p40"]').click()`);
  assert.equal(await js(`document.querySelectorAll('[data-segment]').length`),2);
- assert.deepEqual(await selected(),['p1','p20','p40']);
+ assert.deepEqual(await selected(),['p1','p25','p40']);
  const beforeExtensionCancel=await snapshot();
  await drag(await point(2,true),await point(44),true);
  assert.deepEqual(await snapshot(),beforeExtensionCancel);

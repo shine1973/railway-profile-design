@@ -213,7 +213,7 @@ $('chart').oncontextmenu=e=>e.preventDefault();
 $('chart').onpointerdown=e=>{
   if(!busy&&!pan&&(e.button===0||e.button===2)&&view){
     const control=e.button===0?controlHit(e):null;
-    pan={...coords(e),view:{...view},button:e.button,moved:false,pointerId:e.pointerId,controlId:control?.id,targetId:control?.id,original:control?structuredClone(history.current):null,lift:control?history.current.controls[control.id]:null,preview:null,extend:control&&$('endpointDragMode').value==='extend'&&Boolean(extensionStart(history.current,control.id))};
+    pan={...coords(e),view:{...view},button:e.button,moved:false,pointerId:e.pointerId,controlId:control?.id,targetId:control?.id,original:control?structuredClone(history.current):null,lift:control?history.current.controls[control.id]:null,preview:null,extend:control&&history.current.pendingControl!==control.id&&$('endpointDragMode').value==='extend'&&Boolean(extensionStart(history.current,control.id))};
     $('chart').setPointerCapture(e.pointerId);
   }
 };
