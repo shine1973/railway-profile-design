@@ -47,7 +47,11 @@ app.whenReady().then(async()=>{
  assert.deepEqual(await selected(),['p1','p2','p10','p15']);
  await js(`document.querySelector('[data-select="p8"]').click();document.getElementById('cancelPending').click()`);
  assert.deepEqual(await selected(),['p1','p2','p10','p15']);
+ const positions=()=>js(`(()=>{const r=document.getElementById('chart').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,tableTop:document.querySelector('.tablecard').getBoundingClientRect().top,toolbarHeight:document.querySelector('.zoomtools').getBoundingClientRect().height,scrollY:window.scrollY,details:Array.from(document.querySelectorAll('.workspace,.chartcard,.chartfoot,aside,#controls,.controltools,.sectionhead')).map(e=>[e.className||e.id,e.getBoundingClientRect().height])}})()`);
+ const beforeSelection=await positions();
  await js(`document.querySelector('[data-select="p2"]').click()`);
+ assert.deepEqual(await positions(),beforeSelection);
+
  assert.equal(await js(`document.querySelector('#chart [data-pending]').getAttribute('data-pending')`),'p2');
  assert.equal(await js(`document.getElementById('selectionHint').hidden`),false);
  assert.match(await js(`document.getElementById('selectionHint').textContent`),/记录序号 2/);
@@ -59,8 +63,13 @@ app.whenReady().then(async()=>{
  await js(`document.querySelector('[data-select="p2"]').click();document.querySelector('[data-select="p4"]').click()`);
  assert.equal(await js(`document.querySelector('#chart [data-pending]')===null`),true);
  assert.equal(await js(`document.getElementById('selectionHint').hidden`),true);
+ assert.deepEqual(await positions(),beforeSelection);
  assert.equal(await js(`document.querySelectorAll('[data-segment]').length`),3);
- console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal, shared endpoint selection highlight');
+ w.setSize(1000,960);await delay();
+ const compact=await positions();
+ await js(`document.querySelector('[data-select="p4"]').click()`);assert.deepEqual(await positions(),compact);
+ await js(`document.getElementById('cancelPending').click()`);assert.deepEqual(await positions(),compact);
+ console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal, shared endpoint selection highlight, stable layout at 1440/1000 widths');
  app.exit(0);
  }catch(e){console.error(e);app.exit(1);}
 });

@@ -60,7 +60,9 @@ function render(){
   $('controls').innerHTML=results.filter(r=>selected.includes(r.id)).map(r=>`<div class="controlitem ${r.id===project().pendingControl?'pendingcontrol':''}"><div class="top"><span>点号 ${r.no}${r.no!==r.index+1?` <small> / 序号 ${r.index+1}</small>`:''}</span><button data-remove="${r.id}" aria-label="取消控制点 ${r.no}">×</button></div><label>起道量 <input type="text" inputmode="numeric" aria-label="控制点 ${r.no} 起道量" data-lift="${r.id}" value="${project().controls[r.id]}" class="${project().controls[r.id]<0?'negative':''}"> mm</label></div>`).join('') || '<p class="hint">尚未选择控制点。<br>每次选择两个端点生成独立坡段。</p>';
   const pending=results.find(r=>r.id===project().pendingControl);
   $('selectionHint').hidden=!pending;
-  $('selectionHint').textContent=pending?`● 已选新坡段起点：现场点号 ${pending.no} · 记录序号 ${pending.index+1}。请选择另一个端点；再次点击此点可取消。`:'';
+  $('chartBasis').hidden=Boolean(pending);
+  $('selectionHint').textContent=pending?`已选起点：点号 ${pending.no} · 记录序号 ${pending.index+1}，请选择另一端`:'';
+  $('selectionHint').title=$('selectionHint').textContent;
   const segmentRows=project().segments.map(([a,b],i)=>{const start=results.find(r=>r.id===a),end=results.find(r=>r.id===b);return `<div class="segmentitem">坡段 ${i+1} · 序号 ${start.index+1} ↔ ${end.index+1}<button data-segment="${i}" aria-label="删除坡段 ${i+1}">删除</button></div>`;}).join('');
   $('controls').insertAdjacentHTML('afterbegin',`<div class="segmenthint">${pending?`已选序号 ${pending.index+1}，请选另一端 <button id="cancelPending">取消</button>`:'每次重新选两个端点，独立生成一段'}</div>${segmentRows}`);
   if($('cancelPending'))$('cancelPending').onclick=()=>mutate(cancelPending);
