@@ -40,7 +40,7 @@ app.whenReady().then(async()=>{
  await js(`document.querySelector('[data-select="p4"]').click()`);
  assert.equal(await js(`document.querySelectorAll('[data-segment]').length`),2);
  assert.equal(await js(`(document.querySelector('#chart path[stroke="#df9e3d"]').getAttribute('d').match(/M/g)||[]).length`),2);
- assert.equal(await js(`document.querySelector('[data-row="p2"]').children[9].textContent`),'');
+ assert.equal(await js(`document.querySelector('[data-row="p2"]').children[10].textContent`),'');
  await js(`document.querySelector('[data-select="p10"]').click();document.querySelector('[data-select="p15"]').click()`);
  assert.equal(await js(`document.querySelector('[data-row="p7"]').children[8].textContent`),'未设计');
  await js(`document.querySelector('[data-segment="1"]').click()`);
@@ -92,7 +92,7 @@ app.whenReady().then(async()=>{
  assert.equal(await js(`document.getElementById('curveIssues').hidden`),true);
  assert.match(await js(`document.getElementById('chart').textContent`),/竖曲线起点 1/);
  assert.match(await js(`document.getElementById('chart').textContent`),/竖曲线终点 1/);
- assert.equal(await js(`document.querySelector('[data-row="p20"]').children[12].textContent`),'10000');
+ assert.equal(await js(`document.querySelector('[data-row="p20"]').children[9].textContent`),'10000');
  w.setSize(1440,960);await delay();
  await js(`document.getElementById('controls').scrollTop=document.getElementById('controls').scrollHeight`);
  await require('node:fs/promises').writeFile('/tmp/railway-v17-preview.png',(await w.webContents.capturePage()).toPNG());

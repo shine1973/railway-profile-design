@@ -17,12 +17,12 @@ export function addFormulas(book,project,rows,model,options) {
   const geometry=curveGeometry(project,rows);
   const segments=designSegments(project).map(s=>s.map(id=>rows.find(r=>r.id===id)).sort((a,b)=>a.index-b.index));
   for(const r of rows){
-    const i=r.index+2;
+    const i=r.index+2,m=i+1;
     helper.getCell(`A${i}`).value=r.index+1;
-    put(helper,`B${i}`,i===2?`'测量数据'!C2`:`IF('测量数据'!D${i-1}="",B${i-1},C${i-1}+'测量数据'!D${i-1})`,r.instrument-r.datum);
-    put(helper,`C${i}`,`B${i}-'测量数据'!C${i}`,r.measured-r.datum);
-    put(main,`E${i}`,`'计算过程'!B${i}+'参数'!$D$4`,r.instrument);
-    put(main,`F${i}`,`E${i}-C${i}`,r.measured);
+    put(helper,`B${i}`,i===2?`'测量数据'!C3`:`IF('测量数据'!D${i}="",B${i-1},C${i-1}+'测量数据'!D${i})`,r.instrument-r.datum);
+    put(helper,`C${i}`,`B${i}-'测量数据'!C${m}`,r.measured-r.datum);
+    put(main,`E${m}`,`'计算过程'!B${i}+'参数'!$D$4`,r.instrument);
+    put(main,`F${m}`,`E${m}-C${m}`,r.measured);
     put(params,`A${i}`,`(B${i}-1)*$D$3`,r.distance);
     const seg=segments.find(([a,b])=>r.index>=a.index&&r.index<=b.index);
     const pairIndex=geometry.curves.findIndex(c=>r.distance>=c.from&&r.distance<=c.to);
@@ -83,16 +83,16 @@ export function addFormulas(book,project,rows,model,options) {
   put(params,'D2',"'输入参数'!B2",project.sleepers);
   inputs.getCell('B2').dataValidation=params.getCell('D2').dataValidation;
   inputs.getRow(5).values=['控制点记录序号','起道设置 mm（可改）','现场点号','实测高程 mm','控制点设计 mm',null,'竖曲线组合','半径 m（可改）'];
-  for(const [id,i] of controls){const r=rows.find(r=>r.id===id);inputs.getCell(`A${i}`).value=r.index+1;inputs.getCell(`B${i}`).value=project.controls[id];put(inputs,`C${i}`,`'测量数据'!B${r.index+2}`,r.no);
+  for(const [id,i] of controls){const r=rows.find(r=>r.id===id);inputs.getCell(`A${i}`).value=r.index+1;inputs.getCell(`B${i}`).value=project.controls[id];put(inputs,`C${i}`,`'测量数据'!B${r.index+3}`,r.no);
     inputs.getCell(`B${i}`).dataValidation=params.getCell(`D${i}`).dataValidation;
-    put(inputs,`D${i}`,`'测量数据'!F${r.index+2}`,r.measured);put(inputs,`E${i}`,`D${i}+B${i}`,r.measured+project.controls[id]);
+    put(inputs,`D${i}`,`'测量数据'!F${r.index+3}`,r.measured);put(inputs,`E${i}`,`D${i}+B${i}`,r.measured+project.controls[id]);
     put(params,`D${i}`,`'输入参数'!B${i}`,project.controls[id]);
   }
   geometry.curves.forEach((c,k)=>{const i=k+6;inputs.getCell(`G${i}`).value=`坡段 ${c.leftIndex+1} → ${c.rightIndex+1}`;inputs.getCell(`H${i}`).value=c.radius;
     inputs.getCell(`H${i}`).dataValidation=curves.getCell(`B${k+2}`).dataValidation;put(curves,`B${k+2}`,`'输入参数'!H${i}`,c.radius);
   });
   for(const r of rows){
-    const i=r.index+2;let expr=`'计算过程'!D${i}`;
+    const i=r.index+2,m=i+1;let expr=`'计算过程'!D${i}`;
     if(r.design!==null){
       if(geometry.curves.length){
         const last=geometry.curves.length+1;
@@ -111,23 +111,23 @@ export function addFormulas(book,project,rows,model,options) {
         put(steps,`P${i}`,`(H${i}+O${i})*1000`,curveHeight(c,r.distance));
         put(steps,`R${i}`,`COUNTIF('竖曲线参数'!$P$2:$P$${last},FALSE)=0`,true);
         put(steps,`Q${i}`,`IF(R${i},IF(D${i},P${i},'计算过程'!D${i}),NA())`,r.design);
-        put(main,`K${i}`,`IF('测点竖曲线'!D${i},'测点竖曲线'!E${i},"")`,r.radius??'');
+        put(main,`H${m}`,`IF('测点竖曲线'!D${i},'测点竖曲线'!E${i},"")`,r.radius??'');
         expr=`'测点竖曲线'!Q${i}`;
       }
     }
-    put(main,`G${i}`,expr,r.design??'未设计');
-    put(main,`J${i}`,`IF(ISNUMBER(G${i}),G${i}-F${i},G${i})`,r.lift??'未设计');
-    if(r.slope!==null){put(main,`I${i}`,`G${i+1}-G${i}`,r.increment);put(main,`H${i}`,`I${i}/'参数'!$D$3`,r.slope);}
+    put(main,`G${m}`,expr,r.design??'未设计');
+    put(main,`K${m}`,`IF(ISNUMBER(G${m}),G${m}-F${m},G${m})`,r.lift??'未设计');
+    if(r.slope!==null){put(main,`J${m}`,`G${m+1}-G${m}`,r.increment);put(main,`I${m}`,`J${m}/'参数'!$D$3`,r.slope);}
     if(controls.has(r.id))put(params,`H${i}`,`${target(r.id)}+$J$2`,r.measured+project.controls[r.id]+model.offset);
-    put(helper,`E${i}`,`IF(IFERROR('测量数据'!J${i}<0,FALSE),IF(ISNUMBER('测量数据'!J${i}),'参数'!F${i},NA()),NA())`,r.lift!==null&&r.lift<0?r.measured+model.offset:{error:'#N/A'});
+    put(helper,`E${i}`,`IF(IFERROR('测量数据'!K${m}<0,FALSE),IF(ISNUMBER('测量数据'!K${m}),'参数'!F${i},NA()),NA())`,r.lift!==null&&r.lift<0?r.measured+model.offset:{error:'#N/A'});
     const parts=[];
-    if(options.labelNo)parts.push(`'测量数据'!B${i}`);
-    if(options.labelFeature!==false&&r.feature)parts.push(`'测量数据'!A${i}`);
-    if(options.labelLift&&r.lift!==null)parts.push(`IF('测量数据'!J${i}<0,IF(ROUND('测量数据'!J${i},0)=0,"−0",TEXT('测量数据'!J${i},"0")),TEXT('测量数据'!J${i},"0"))&" mm"`);
+    if(options.labelNo)parts.push(`'测量数据'!B${m}`);
+    if(options.labelFeature!==false&&r.feature)parts.push(`'测量数据'!A${m}`);
+    if(options.labelLift&&r.lift!==null)parts.push(`IF('测量数据'!K${m}<0,IF(ROUND('测量数据'!K${m},0)=0,"−0",TEXT('测量数据'!K${m},"0")),TEXT('测量数据'!K${m},"0"))&" mm"`);
     if(parts.length)put(params,`R${i}`,parts.join('&" · "&'),[options.labelNo?String(r.no):'',options.labelFeature!==false?r.feature:'',options.labelLift&&r.lift!==null?String(Math.round(r.lift))+' mm':''].filter(Boolean).join(' · '));
   }
   // All chart heights use this dynamic common offset. Keep controls included even when pending.
-  const minimum=`MIN('测量数据'!F2:G${n}${[...controls.keys()].map(id=>`,${target(id)}`).join('')})`;
+  const minimum=`MIN('测量数据'!F3:G${n+1}${[...controls.keys()].map(id=>`,${target(id)}`).join('')})`;
   put(params,'J2',`IF(${minimum}<0,CEILING((100-${minimum})/100,1)*100,0)`,model.offset);
   put(params,'S2','IF(J2=0,"纵断面对比","纵断面对比（图示高程额外偏移 +"&TEXT(J2,"0")&" mm）")',model.offset?`纵断面对比（图示高程额外偏移 +${model.offset} mm）`:'纵断面对比');
   const guide=book.addWorksheet('公式使用说明');guide.getColumn(1).width=110;
@@ -137,7 +137,7 @@ export function addFormulas(book,project,rows,model,options) {
     '阅读顺序：输入参数 → 坡段计算 → 竖曲线参数 → 测点竖曲线 → 测量数据。公式分步说明表逐列解释计算含义，表头批注也可查看。',
     '修改公式建议从一行开始，核对结果后再在同一坡段内向下填充；不要跨坡段或覆盖未设计区。$表示固定引用，例如F$2固定第2行。重新从软件导出会生成新文件。',
     '坡段拓扑和控制点记录序号固定。增删记录、移动端点、增删坡段或竖曲线，请返回软件操作并重新导出。',
-    '前后坡段各由两个测点确定，竖曲线交点由坡线延长计算；实际起道量以测量数据 J列为准。',
+    '前后坡段各由两个测点确定，竖曲线交点由坡线延长计算；实际起道量以测量数据 K列为准。',
     '竖曲线参数 P列为FALSE表示越界、重叠、半径无效或两坡相同；设计结果显示#N/A，请调整后再使用。此项仅为几何检查，不代表符合规范。',
     '图表沿用导出时的显示范围和刻度。修改输入后系列随公式更新；如超出坐标范围，请在Excel/WPS中调整坐标轴。',
     '高程和起道量显示整毫米；坡度和递增量显示一位小数，公式保留完整精度。未设计区间保持空白坡线。',
@@ -147,11 +147,11 @@ export function addFormulas(book,project,rows,model,options) {
   for(const address of ['D2',...[...controls.values()].map(i=>`D${i}`)])params.getCell(address).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F6F7'}};
   const explanations=book.addWorksheet('公式分步说明');
   explanations.addRow(['工作表','计算列','中文说明','首行公式示例（文本）']);
-  const describe=(sheet,texts)=>texts.forEach((text,k)=>{
-    const cell=sheet.getCell(1,k+1),name=cell.value;
+  const describe=(sheet,texts,headerRow=1)=>texts.forEach((text,k)=>{
+    const cell=sheet.getCell(headerRow,k+1),name=cell.value;
     cell.note=text;
     let sample='';sheet.getColumn(k+1).eachCell(c=>{if(!sample&&c.formula)sample='='+c.formula;});
-    explanations.addRow([sheet.name,`${cell.address.replace(/1$/,'')} · ${name}`,text,sample]);
+    explanations.addRow([sheet.name,`${cell.address.replace(/\d+$/,'')} · ${name}`,text,sample]);
   });
   describe(helper,[
     '按记录顺序从1编号，不按现场点号排序。','首次等于首点前视；上点无后视时沿用仪器高，否则用上点实测加上点后视。',
@@ -182,7 +182,7 @@ export function addFormulas(book,project,rows,model,options) {
   for(const [address,text] of Object.entries({B2:'输入每个测点间隔的轨枕根数；固定枕距0.6米。',B5:'控制点起道量，单位毫米；允许负值。',D5:'引用成果表的实测高程；读数变化时联动。',E5:'实测高程加设置起道量。可直接修改本列公式来改变控制点设计高程。',H5:'自定义竖曲线半径，单位米；此表不会自动选取半径或抬高坡线。'}))inputs.getCell(address).note=text;
   explanations.addRow(['输入参数','B2 / B6起 / H6起','依次为轨枕根数、控制点起道量、竖曲线半径；蓝色输入集中在此表。','']);
   explanations.addRow(['输入参数','D6起 / E6起','D引用实测；E=实测+起道设置，可修改公式。','=D6+B6']);
-  describe(main,['现场特征文字，可改。','现场点号，可改；距离仍按记录顺序。','前视读数，单位整毫米。','后视读数，转站点填写，否则留空。','相对仪器高加统一基准。','仪器高减前视读数。','引用分步计算的最终设计高程；未设计时显示未设计。','本点到下一点的递增量除以间距，单位‰。','下一点设计高程减本点设计高程，单位mm。','设计高程减实测高程，负值红色显示。','在曲线内显示对应半径，其他位置留空。']);
+  describe(main,['现场特征文字，可改。','现场点号，可改；距离仍按记录顺序。','前视读数，单位整毫米。','后视读数，转站点填写，否则留空。','相对仪器高加统一基准。','仪器高减前视读数。','引用分步计算的最终设计高程；未设计时显示未设计。','在曲线内显示对应半径，其他位置留空。','本点到下一点的递增量除以间距，单位‰。','下一点设计高程减本点设计高程，单位mm。','设计高程减实测高程，负值红色显示。'],2);
   explanations.columns=[{width:20},{width:30},{width:85},{width:85}];explanations.getRow(1).height=30;
   explanations.eachRow((r,i)=>{r.height=i===1?30:48;r.alignment={vertical:'middle',wrapText:true};});
   explanations.views=[{state:'frozen',ySplit:1}];

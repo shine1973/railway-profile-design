@@ -36,7 +36,7 @@ test('公式导出含完整计算链、缓存、动态负值、版本迁移和�
   p.points.forEach((r,i)=>{r.fore=i<=20?1000:i<=70?800:900;});
   const bytes=await exportWorkbook(p,{formulas:true,labelLift:true});const book=new ExcelJS.Workbook();await book.xlsx.load(bytes);
   const sheet=book.getWorksheet('测量数据'),rows=calculate(p);
-  rows.forEach((r,i)=>{for(const [col,key] of [['E','instrument'],['F','measured'],['G','design'],['J','lift']]){assert.ok(sheet.getCell(`${col}${i+2}`).formula);assert.equal(sheet.getCell(`${col}${i+2}`).result,r[key]);}});
+  rows.forEach((r,i)=>{for(const [col,key] of [['E','instrument'],['F','measured'],['G','design'],['K','lift']]){assert.ok(sheet.getCell(`${col}${i+3}`).formula);assert.equal(sheet.getCell(`${col}${i+3}`).result,r[key]);}});
   assert.ok(book.getWorksheet('竖曲线参数').getCell('P2').formula);
   const zip=await JSZip.loadAsync(bytes),chart=await zip.file('xl/charts/chart1.xml').async('string');
   assert.match(chart,/计算过程/);assert.match(chart,/strRef/);assert.equal(sheet.autoFilter,undefined);
@@ -48,7 +48,7 @@ test('分步公式可读可改：参数集中、短设计公式、计算说明�
  const input=book.getWorksheet('输入参数'),main=book.getWorksheet('测量数据'),steps=book.getWorksheet('测点竖曲线');
  assert.equal(input.getCell('B2').value,6);assert.equal(input.getCell('B7').value,0);
  assert.equal(input.getCell('H6').value,10000);assert.equal(input.getCell('E7').formula,'D7+B7');
- assert.equal(main.getCell('G52').formula,"'测点竖曲线'!Q52");
+ assert.equal(main.getCell('G53').formula,"'测点竖曲线'!Q52");
  assert.equal(steps.getCell('P52').formula,'(H52+O52)*1000');
  assert.ok(steps.getCell('O1').note.includes('避免大半径'));
  assert.equal(book.getWorksheet('坡段计算').getCell('K2').formula,'I2/(C2-B2)');
@@ -70,7 +70,7 @@ test('独立前后坡段延长线交点位于测点之间：仅显式连接、�
  assert.ok(Math.abs(g.curves[0].x/3.6-Math.round(g.curves[0].x/3.6))>.01);
  assert.notEqual(rows[40].design,null);assert.equal(rows[40].radius,null);assert.equal(rows[53].radius,10000);assert.ok(Math.abs(rows[20].slope+1)<1e-10);
  const book=new ExcelJS.Workbook();const bytes=await exportWorkbook(p,{formulas:true});await book.xlsx.load(bytes);
- assert.equal(book.getWorksheet('测量数据').getCell('K55').result,10000);
+ assert.equal(book.getWorksheet('测量数据').getCell('H56').result,10000);
  const z=await JSZip.loadAsync(bytes);assert.match(await z.file('xl/charts/chart1.xml').async('string'),/竖曲线起点 1/);
  assert.deepEqual(validateProject(JSON.parse(JSON.stringify(p))),p);
  assert.ok(moveControl(p,'p20','p21'));assert.ok(p.curves['p0~p21~p70~p100']);
@@ -98,7 +98,7 @@ test('测量日期地点保存往返、旧版迁移和两种Excel导出',async()
  assert.deepEqual(validateProject(JSON.parse(JSON.stringify(p))),p);
  assert.throws(()=>validateProject({...p,measurementDate:'2026-02-30'}),/日期/);
  assert.equal(validateProject({...p,version:5}).measurementDate,'');
- for(const formulas of [false,true]){const b=new ExcelJS.Workbook();await b.xlsx.load(await exportWorkbook(p,{formulas}));const s=b.getWorksheet('测量数据');assert.equal(s.getCell('M1').value,p.measurementDate);assert.equal(s.getCell('O1').value,p.measurementLocation);assert.equal(b.getWorksheet('参数').getCell('W2').value,p.measurementLocation);}
+ for(const formulas of [false,true]){const b=new ExcelJS.Workbook();await b.xlsx.load(await exportWorkbook(p,{formulas}));const s=b.getWorksheet('测量数据');assert.equal(s.getCell('B1').value,p.measurementDate);assert.equal(s.getCell('F1').value,p.measurementLocation);assert.equal(b.getWorksheet('参数').getCell('W2').value,p.measurementLocation);}
 });
 
 test('只起不落：凸形减小半径避开实测凸起，推荐不改动控制点及既有半径',()=>{

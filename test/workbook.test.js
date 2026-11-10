@@ -11,8 +11,8 @@ test('独立坡段导出：中间留空，相邻端点也不跨段连线',async(
   for(const id of ['p0','p1','p2','p3','p6','p7'])pickEndpoint(p,id);
   const buffer=await exportWorkbook(p),book=new ExcelJS.Workbook();await book.xlsx.load(buffer);
   const data=book.getWorksheet('测量数据'),params=book.getWorksheet('参数');
-  assert.equal(data.getCell('G6').value,'未设计');assert.equal(data.getCell('G7').value,'未设计');
-  assert.equal(data.getCell('H3').value,null);
+  assert.equal(data.getCell('G7').value,'未设计');assert.equal(data.getCell('G8').value,'未设计');
+  assert.equal(data.getCell('I4').value,null);
   assert.equal(params.getCell('N4').value,2.5);assert.equal(params.getCell('O4').value,null);
   assert.equal(params.getCell('N5').value,3);assert.notEqual(params.getCell('O5').result,null);
   assert.equal(params.getCell('P4').value,7);assert.equal(params.getCell('Q4').value,8);
@@ -34,8 +34,8 @@ test('导出当前坐标范围、序号刻度、负设计高程偏移和标注�
   const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);
   const params=book.getWorksheet('参数'),data=book.getWorksheet('测量数据');
   assert.ok(model.offset>0);assert.equal(params.getCell('J2').value,model.offset);
-  rows.forEach((r,i)=>{assert.equal(data.getCell(i+2,6).value,r.measured);assert.equal(params.getCell(i+2,6).result,r.measured+model.offset);});
-  assert.equal(data.getCell('F2').alignment.horizontal,'center');
+  rows.forEach((r,i)=>{assert.equal(data.getCell(i+3,6).value,r.measured);assert.equal(params.getCell(i+2,6).result,r.measured+model.offset);});
+  assert.equal(data.getCell('F3').alignment.horizontal,'center');
   const rels=await zip.file('xl/worksheets/_rels/sheet1.xml.rels').async('string');
   assert.match(rels,/rIdProfileChart/);assert.match(rels,/comments/);
   const noLabels=await JSZip.loadAsync(await exportWorkbook(p,{...options,labelNo:false,labelFeature:false,labelLift:false}));
@@ -61,10 +61,10 @@ test('导出十一列、原始数据、负值样式、真实可编辑散点图�
   const p=newProject(parseRows([['特征点','点号','前视读数','后视读数'],['<岔心>',0,1200,null],['',0,1220,null],['',2,1240,null],['',3,1250,null]]));
   p.controls={p3:-5,p4:0};p.segments=[['p3','p4']];const buffer=await exportWorkbook(p);
   const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);const s=book.getWorksheet('测量数据');
-  assert.deepEqual(s.getRow(1).values.slice(1,12),['特征点','点号','前视读数','后视读数','仪器高','实测高程','设计高程','坡度','递增量','起道量','竖曲线半径（m）']);
-  calculate(p).forEach((r,i)=>{assert.equal(s.getCell(i+2,5).value,r.instrument);assert.equal(s.getCell(i+2,6).value,r.measured);assert.ok(r.measured>=10);});
+  assert.deepEqual(s.getRow(2).values.slice(1,12),['特征点','点号','前视读数','后视读数','仪器高','实测高程','设计高程','竖曲线半径（m）','坡度','递增量','起道量']);
+  calculate(p).forEach((r,i)=>{assert.equal(s.getCell(i+3,5).value,r.instrument);assert.equal(s.getCell(i+3,6).value,r.measured);assert.ok(r.measured>=10);});
   assert.equal(s.autoFilter,undefined);assert.doesNotMatch(await (await JSZip.loadAsync(buffer)).file('xl/worksheets/sheet1.xml').async('string'),/<autoFilter/);
-  assert.equal(s.getCell('G2').value,'未设计');assert.equal(s.getCell('J3').value,-5);assert.equal(s.getCell('J3').font.color.argb,'FFDC3545');assert.equal(s.getCell('H4').value,null);assert.equal(s.getCell('H3').numFmt,'0.0');assert.equal(s.getCell('A2').value,'<岔心>');
+  assert.equal(s.getCell('G3').value,'未设计');assert.equal(s.getCell('K4').value,-5);assert.equal(s.getCell('K4').font.color.argb,'FFDC3545');assert.equal(s.getCell('I5').value,null);assert.equal(s.getCell('I4').numFmt,'0.0');assert.equal(s.getCell('A3').value,'<岔心>');
   const zip=await JSZip.loadAsync(buffer),chart=await zip.file('xl/charts/chart1.xml').async('string');
   assert.match(chart,/<c:scatterChart>/);assert.match(chart,/'测量数据'|&apos;测量数据&apos;/);assert.match(chart,/<c:dispBlanksAs val="gap"/);
   // WPS associates legend entries with physical series order: keep it aligned
@@ -80,7 +80,7 @@ test('导出十一列、原始数据、负值样式、真实可编辑散点图�
   assert.match(xAxis,/<c:y val="0.84"\/>/);
   const legend=chart.match(/<c:legend>[\s\S]*?<\/c:legend>/)[0];
   assert.match(legend,/<c:y val="0.92"\/>/);
-  assert.match(chart,/\$F\$2:\$F\$5/);assert.match(chart,/\$O\$2:\$O\$5/);
+  assert.match(chart,/\$F\$3:\$F\$6/);assert.match(chart,/\$O\$2:\$O\$5/);
   assert.match(await zip.file('xl/worksheets/sheet1.xml').async('string'),/<drawing r:id="rIdProfileChart"/);
   const imported=await importWorkbook(buffer,'test');assert.deepEqual(imported.points.map(p=>p.no),[0,0,2,3]);
 });

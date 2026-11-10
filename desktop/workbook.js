@@ -120,24 +120,23 @@ export async function exportWorkbook(rawProject, options = {}) {
   const annotations=rows.filter(r=>r.index+1>=model.view.min&&r.index+1<=model.view.max).map(r=>({index:r.index,text:[options.labelNo?String(r.no):'',options.labelFeature!==false?r.feature:'',options.labelLift&&r.lift!==null?format(r.lift)+' mm':''].filter(Boolean).join(' · '),negative:r.lift!==null&&r.lift<0,formula:options.formulas?`'参数'!$R$${r.index+2}`:null})).filter(r=>r.text);
   const book = new ExcelJS.Workbook();
   book.creator = '线路拉坡'; book.created = new Date();
-  const sheet = book.addWorksheet('测量数据', {views: [{state:'frozen',ySplit:1,xSplit:2}]});
-  sheet.addRow(['特征点','点号','前视读数','后视读数','仪器高','实测高程','设计高程','坡度','递增量','起道量','竖曲线半径（m）']);
+  const sheet = book.addWorksheet('测量数据', {views: [{state:'frozen',ySplit:2,xSplit:2}]});
+  sheet.addRow(['测量日期',project.measurementDate||'未填写',null,null,'测量地点',project.measurementLocation||'未填写']);
+  sheet.mergeCells('B1:D1');sheet.mergeCells('F1:K1');
+  sheet.addRow(['特征点','点号','前视读数','后视读数','仪器高','实测高程','设计高程','竖曲线半径（m）','坡度','递增量','起道量']);
   for (const r of rows) {
-    sheet.addRow([r.feature,r.no,r.fore,r.back,r.instrument,r.measured,r.design ?? '未设计',r.slope,r.increment,r.lift ?? '未设计',r.radius]);
+    sheet.addRow([r.feature,r.no,r.fore,r.back,r.instrument,r.measured,r.design ?? '未设计',r.radius,r.slope,r.increment,r.lift ?? '未设计']);
   }
-  sheet.getColumn('L').width=12;sheet.getColumn('M').width=16;sheet.getColumn('N').width=12;
-  sheet.getCell('L1').value='测量日期';sheet.getCell('M1').value=project.measurementDate||'未填写';
-  sheet.getCell('N1').value='测量地点';sheet.mergeCells('O1:AB1');sheet.getCell('O1').value=project.measurementLocation||'未填写';
-  sheet.getCell('O1').alignment={vertical:'middle',horizontal:'left',wrapText:true};
-  const widths = [24,12,14,14,16,19,16,12,14,14,18];
-  widths.forEach((w,i) => {sheet.getColumn(i+1).width=w; if(i>0) sheet.getColumn(i+1).numFmt = i===7||i===8 ? '0.0' : '0';});
-  sheet.getRow(1).height=30;
-  sheet.getRow(1).alignment={vertical:'middle',horizontal:'center'};
-  sheet.getRow(1).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'},size:11};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF173A48'}};});
-  sheet.eachRow((row,i)=>{if(i>1){row.height=23;row.eachCell(c=>{c.font={name:'Microsoft YaHei',size:11};c.alignment={vertical:'middle',horizontal:'center'};if(i%2===0)c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F6F7'}};});}});
-  rows.forEach((r,i)=>{if(!options.formulas && r.lift!==null && r.lift<0) sheet.getCell(i+2,10).font={color:{argb:'FFDC3545'},bold:true};});
-  sheet.addConditionalFormatting({ref:`J2:J${rows.length+1}`,rules:[{type:'cellIs',operator:'lessThan',formulae:['0'],priority:1,style:{font:{color:{argb:'FFDC3545'},bold:true}}}]});
-  sheet.pageSetup={orientation:'landscape',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'1:1'};
+  const widths = [24,12,14,14,16,19,16,18,12,14,14];
+  widths.forEach((w,i) => {sheet.getColumn(i+1).width=w; if(i>0) sheet.getColumn(i+1).numFmt = i===8||i===9 ? '0.0' : '0';});
+  sheet.getRow(2).height=30;
+  sheet.getRow(2).alignment={vertical:'middle',horizontal:'center'};
+  sheet.getRow(2).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'},size:11};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF173A48'}};});
+  sheet.eachRow((row,i)=>{if(i>2){row.height=23;row.eachCell(c=>{c.font={name:'Microsoft YaHei',size:11};c.alignment={vertical:'middle',horizontal:'center'};if(i%2===0)c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF2F6F7'}};});}});
+  rows.forEach((r,i)=>{if(!options.formulas && r.lift!==null && r.lift<0) sheet.getCell(i+3,11).font={color:{argb:'FFDC3545'},bold:true};});
+  sheet.addConditionalFormatting({ref:`K3:K${rows.length+2}`,rules:[{type:'cellIs',operator:'lessThan',formulae:['0'],priority:1,style:{font:{color:{argb:'FFDC3545'},bold:true}}}]});
+  sheet.getRow(1).height=36;sheet.getRow(1).alignment={vertical:'middle',horizontal:'left',wrapText:true};sheet.getRow(1).font={name:'Microsoft YaHei',size:11,bold:true,color:{argb:'FF173A48'}};sheet.getRow(1).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE9F2F6'}};
+  sheet.pageSetup={orientation:'landscape',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:'1:2'};
   const params = book.addWorksheet('参数');
   params.addRow(['累计距离（米）','记录序号','项目名称',project.name]);
   rows.forEach((r,i)=>{params.getCell(i+2,1).value=r.distance;params.getCell(i+2,2).value=i+1;});
@@ -145,13 +144,13 @@ export async function exportWorkbook(rawProject, options = {}) {
   params.getCell('C2').value='轨枕根数';params.getCell('D2').value=project.sleepers;
   params.getCell('C3').value='测点间距（米）';params.getCell('D3').value=project.sleepers*0.6;
   params.getCell('C4').value='首点假定高程（mm）';params.getCell('D4').value=rows[0].datum;
-  sheet.getCell('E1').note='本行前视读数对应的仪器高。实测高程=仪器高-前视读数；若本行有后视，下一行仪器高=本行实测高程+后视读数。';
+  sheet.getCell('E2').note='本行前视读数对应的仪器高。实测高程=仪器高-前视读数；若本行有后视，下一行仪器高=本行实测高程+后视读数。';
   params.getCell('C5').value='控制点记录序号';params.getCell('D5').value='设置起道量（mm）';
   let row=6;rows.forEach(r=>{if(Object.hasOwn(project.controls,r.id)){params.getCell(row,3).value=r.index+1;params.getCell(row++,4).value=project.controls[r.id];}});
   params.getCell('F1').value='图示实测高程';params.getCell('G1').value='图示设计高程';params.getCell('H1').value='控制点图示高程';
   rows.forEach((r,i)=>{
-    params.getCell(i+2,6).value={formula:`'测量数据'!F${i+2}+$J$2`,result:r.measured+model.offset};
-    if(r.design!==null)params.getCell(i+2,7).value={formula:`'测量数据'!G${i+2}+$J$2`,result:r.design+model.offset};
+    params.getCell(i+2,6).value={formula:`'测量数据'!F${i+3}+$J$2`,result:r.measured+model.offset};
+    if(r.design!==null)params.getCell(i+2,7).value={formula:`'测量数据'!G${i+3}+$J$2`,result:r.design+model.offset};
     if(Object.hasOwn(project.controls,r.id))params.getCell(i+2,8).value=r.measured+project.controls[r.id]+model.offset;
   });
   params.getCell('J1').value='图示高程额外偏移（mm）';params.getCell('J2').value=model.offset;
@@ -163,7 +162,7 @@ export async function exportWorkbook(rawProject, options = {}) {
   rows.forEach((r,i)=>{
     const previous=rows[i-1];
     if(previous&&previous.design!==null&&r.design!==null&&previous.slope===null)designPoints.push({sequence:i+.5,value:null,row:null});
-    designPoints.push({sequence:i+1,value:r.design===null?null:r.design+model.offset,row:i+2});
+    designPoints.push({sequence:i+1,value:r.design===null?null:r.design+model.offset,row:i+3});
   });
   params.getCell('N1').value='设计图记录序号';params.getCell('O1').value='分段设计图高程';
   designPoints.forEach((p,i)=>{params.getCell(i+2,14).value=p.sequence;if(p.value!==null)params.getCell(i+2,15).value={formula:`'测量数据'!G${p.row}+$J$2`,result:p.value};});
@@ -177,12 +176,12 @@ export async function exportWorkbook(rawProject, options = {}) {
   const curveEnds=geometry.curves.flatMap((c,k)=>[[c.start,'起点'],[c.end,'终点']].map(([distance,name],end)=>({c,k,end,distance,name:`竖曲线${name} ${k+1}`,sequence:distance/(project.sleepers*.6)+1,value:curveHeight(c,distance)+model.offset})));
   curveEnds.forEach((p,k)=>{const i=k+2,j=p.k+2,col=p.end?'L':'K';params.getCell(`T${i}`).value=options.formulas?{formula:`'竖曲线参数'!${col}${j}/$D$3+1`,result:p.sequence}:p.sequence;params.getCell(`U${i}`).value=options.formulas?{formula:`('竖曲线参数'!D${j}+'竖曲线参数'!${p.end?'F':'E'}${j}*('竖曲线参数'!${col}${j}-'竖曲线参数'!C${j}))*1000+$J$2`,result:p.value}:p.value;});
   const zip=await JSZip.loadAsync(await book.xlsx.writeBuffer());
-  const measuredFormula=(model.offset||options.formulas)?`'参数'!$F$2:$F$${rows.length+1}`:`'测量数据'!$F$2:$F$${rows.length+1}`;
+  const measuredFormula=(model.offset||options.formulas)?`'参数'!$F$2:$F$${rows.length+1}`:`'测量数据'!$F$3:$F$${rows.length+2}`;
   const designFormula=`'参数'!$O$2:$O$${designPoints.length+1}`;
   const chartTitle=options.formulas?`<c:tx><c:strRef><c:f>'参数'!$S$2</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${xml(model.offset?`纵断面对比（图示高程额外偏移 +${model.offset} mm）`:'纵断面对比')}</c:v></c:pt></c:strCache></c:strRef></c:tx><c:overlay val="0"/>`:title('纵断面对比'+(model.offset?`（图示高程额外偏移 +${model.offset} mm）`:''));
   const chart=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="${ns}/drawingml/2006/chart" xmlns:a="${ns}/drawingml/2006/main"><c:lang val="zh-CN"/><c:chart><c:title>${chartTitle}</c:title><c:plotArea>${layout(.1,.16,.85,.6,true)}<c:scatterChart><c:scatterStyle val="lineMarker"/>${series(0,'实测','27899A',rows,measuredFormula,rows.map(r=>r.measured+model.offset),{marker:true,annotations,negative:!options.formulas})}${series(1,'设计','DF9E3D',rows,designFormula,designPoints.map(p=>p.value),{xFormula:`'参数'!$N$2:$N$${designPoints.length+1}`,xValues:designPoints.map(p=>p.sequence)})}${series(2,'控制点','D99432',rows,`'参数'!$H$2:$H$${rows.length+1}`,rows.map(r=>Object.hasOwn(project.controls,r.id)?r.measured+project.controls[r.id]+model.offset:null),{marker:true,line:false})}${sequenceGrid(model)}${options.formulas?series(4,'负起道量','D4374F',rows,`'计算过程'!$E$2:$E$${rows.length+1}`,rows.map(r=>r.lift!==null&&r.lift<0?r.measured+model.offset:null),{marker:true,line:false}):''}${curveEnds.length?series(options.formulas?5:4,'竖曲线起终点','DF9E3D',rows,`'参数'!$U$2:$U$${curveEnds.length+1}`,curveEnds.map(p=>p.value),{marker:true,line:false,xFormula:`'参数'!$T$2:$T$${curveEnds.length+1}`,xValues:curveEnds.map(p=>p.sequence),annotations:options.labelFeature!==false?curveEnds.map((p,index)=>({index,text:p.name})):[]}):''}<c:axId val="100"/><c:axId val="200"/></c:scatterChart>${axis(100,200,'b','记录序号',model.view,1)}${axis(200,100,'l','图示高程（mm）',model.axis,model.axis.step)}</c:plotArea><c:legend><c:legendPos val="b"/><c:legendEntry><c:idx val="3"/><c:delete val="1"/></c:legendEntry>${layout(.3,.92,.4,.05)}<c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart></c:chartSpace>`;
   zip.file('xl/charts/chart1.xml',chart);
-  zip.file('xl/drawings/drawing1.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="${ns}/drawingml/2006/spreadsheetDrawing" xmlns:a="${ns}/drawingml/2006/main"><xdr:twoCellAnchor><xdr:from><xdr:col>11</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>28</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>25</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="纵断面对比图"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="${ns}/drawingml/2006/chart"><c:chart xmlns:c="${ns}/drawingml/2006/chart" xmlns:r="${ns}/officeDocument/2006/relationships" r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`);
+  zip.file('xl/drawings/drawing1.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="${ns}/drawingml/2006/spreadsheetDrawing" xmlns:a="${ns}/drawingml/2006/main"><xdr:twoCellAnchor><xdr:from><xdr:col>11</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>2</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>28</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>26</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="纵断面对比图"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="${ns}/drawingml/2006/chart"><c:chart xmlns:c="${ns}/drawingml/2006/chart" xmlns:r="${ns}/officeDocument/2006/relationships" r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`);
   const rel=(type,target)=>`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${ns}/package/2006/relationships"><Relationship Id="rId1" Type="${ns}/officeDocument/2006/relationships/${type}" Target="${target}"/></Relationships>`;
   zip.file('xl/drawings/_rels/drawing1.xml.rels',rel('chart','../charts/chart1.xml'));
   const sheetRelsPath='xl/worksheets/_rels/sheet1.xml.rels';

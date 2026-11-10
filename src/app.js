@@ -5,14 +5,23 @@ import {layoutLabels} from './chart-labels.js';
 const labelMeasure=document.createElement('canvas').getContext('2d');
 labelMeasure.font='11px -apple-system, BlinkMacSystemFont, Segoe UI, Microsoft YaHei, sans-serif';
 const $=id=>document.getElementById(id), api=window.desktop;
-let history=new History(newProject()), saved=JSON.stringify(history.current), results=[], view=null, pan=null, busy=false;
+let history=new History(newProject()), saved=JSON.stringify(history.current), results=[], view=null, pan=null, busy=false, measurementDraft=null;
 const project=()=>pan?.preview??history.current;
 const escape=s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 function status(text){$('status').textContent=text;}
 function message(text,title='请检查'){ $('messageTitle').textContent=title;$('messageText').textContent=text;$('message').showModal(); }
 $('manual').onclick=async()=>{try{await request('openManual');}catch(e){message(e.message,'无法打开手册');}};
 $('messageClose').onclick=()=>$('message').close();
-function dirty(){return JSON.stringify(history.current)!==saved;}
+function dirty(){return JSON.stringify(history.current)!==saved||Boolean(measurementDraft&&Object.entries(measurementDraft).some(([key,value])=>value.trim()!==(history.current[key]??'')));}
+function commitMeasurement(){
+  const values={};
+  for(const id of ['measurementDate','measurementLocation']){
+    if(!$(id).checkValidity())throw new Error('请填写有效的测量日期或地点');
+    values[id]=$(id).value.trim();
+  }
+  if(Object.entries(values).some(([key,value])=>value!==(project()[key]??''))){const p=structuredClone(project());Object.assign(p,values);history.change(p);}
+  measurementDraft=null;
+}
 function mutate(fn){const p=structuredClone(project());fn(p);history.change(p);render();}
 async function replaceAllowed(){
   if(!dirty())return true;
@@ -23,35 +32,38 @@ async function request(method,...args){if(!api)throw new Error('请在桌面应�
 $('import').onclick=()=>action(async()=>{
   if(!await replaceAllowed())return;
   const p=await request('importExcel');if(!p)return;
-  history=new History(p);saved='';view=null;status(`已导入 ${p.points.length} 个测点，请在图中或表格中选择控制点。`);
+  history=new History(p);measurementDraft=null;saved='';view=null;status(`已导入 ${p.points.length} 个测点，请在图中或表格中选择控制点。`);
 });
 $('open').onclick=()=>action(async()=>{
   if(!await replaceAllowed())return;
   const r=await request('openProject');if(!r)return;
-  history=new History(r.project);saved=JSON.stringify(project());view=null;status(`已打开：${r.file}`);
+  history=new History(r.project);measurementDraft=null;saved=JSON.stringify(project());view=null;status(`已打开：${r.file}`);
 });
-$('save').onclick=()=>action(async()=>{const snapshot=structuredClone(project());const file=await request('saveProject',snapshot);if(file){saved=JSON.stringify(snapshot);status(`已保存：${file}`);}});
+$('save').onclick=()=>action(async()=>{commitMeasurement();const snapshot=structuredClone(project());const file=await request('saveProject',snapshot);if(file){saved=JSON.stringify(snapshot);status(`已保存：${file}`);}});
 $('template').onclick=()=>action(async()=>{const file=await request('exportTemplate');if(file)status(`已导出填写模板：${file}`);});
-$('export').onclick=()=>action(async()=>{const file=await request('exportExcel',project(),{formulas:$('exportMode').value==='formulas',view,plotWidth:Math.max(100,($('chart').clientWidth||900)-86),labelNo:$('labelNo').checked,labelFeature:$('labelFeature').checked,labelLift:$('labelLift').checked});if(file)status(`已导出可编辑图表及成果：${file}`);});
+$('export').onclick=()=>action(async()=>{commitMeasurement();const file=await request('exportExcel',project(),{formulas:$('exportMode').value==='formulas',view,plotWidth:Math.max(100,($('chart').clientWidth||900)-86),labelNo:$('labelNo').checked,labelFeature:$('labelFeature').checked,labelLift:$('labelLift').checked});if(file)status(`已导出可编辑图表及成果：${file}`);});
 $('demo').onclick=()=>action(async()=>{
   if(!await replaceAllowed())return;
   const points=Array.from({length:45},(_,i)=>({id:`p${i+1}`,sourceRow:i+2,feature:i===0?'起点':i===17?'道岔尖轨':i===44?'终点':'',no:i-2,fore:1200+Math.round(i*3+32*Math.sin(i/5)),back:null}));
-  history=new History(newProject(points,'演示项目（非现场数据）'));saved='';view=null;status('演示数据已载入。点击两个测点开始拉坡。');
+  history=new History(newProject(points,'演示项目（非现场数据）'));measurementDraft=null;saved='';view=null;status('演示数据已载入。点击两个测点开始拉坡。');
 });
 $('projectName').onchange=e=>mutate(p=>{p.name=e.target.value.trim()||'未命名项目';});
 $('sleepers').onchange=e=>{try{const n=integer(e.target.value,'轨枕根数');if(n<1||n>1000)throw new Error('轨枕根数须在 1 至 1000 之间');view=null;mutate(p=>p.sleepers=n);}catch(err){message(err.message);e.target.value=project().sleepers;}};
-$('undo').onclick=()=>{history.undo();render();};$('redo').onclick=()=>{history.redo();render();};
+$('undo').onclick=()=>{measurementDraft=null;history.undo();render();};$('redo').onclick=()=>{measurementDraft=null;history.redo();render();};
 $('clear').onclick=()=>mutate(p=>{p.controls={};p.segments=[];p.pendingControl=null;p.curves={};});
 $('fit').onclick=()=>{view=null;drawChart();};
 ['labelNo','labelFeature','labelLift'].forEach(id=>$(id).onchange=drawChart);
 document.addEventListener('keydown',e=>{if(pan){if(e.key!=='Escape')e.preventDefault();return;}if((e.metaKey||e.ctrlKey)&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){if(e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?history.redo():history.undo();render();}if(e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}}});
 function toggle(id){try{mutate(p=>pickEndpoint(p,id));status(project().pendingControl?'已选第一个端点，请选择本段另一个端点':'坡段已完成，请重新选择下一段的两个端点');}catch(e){message(e.message);}}
 
-['measurementDate','measurementLocation'].forEach(id=>$(id).onchange=e=>{if(!e.target.checkValidity()){message('请填写有效的测量日期或地点');render();return;}mutate(p=>p[id]=e.target.value.trim());});
+['measurementDate','measurementLocation'].forEach(id=>{
+  $(id).oninput=()=>{measurementDraft={measurementDate:$('measurementDate').value,measurementLocation:$('measurementLocation').value};$('saveState').textContent=dirty()?'● 未保存':'已保存';api?.setDirty(dirty());};
+  $(id).onchange=()=>{try{commitMeasurement();render();}catch(e){message(e.message);}};
+});
 function render(){
   const curvesPanel=$('curves');
   results=calculate(project());
-  $('measurementDate').value=project().measurementDate??'';$('measurementLocation').value=project().measurementLocation??'';
+  $('measurementDate').value=measurementDraft?.measurementDate??project().measurementDate??'';$('measurementLocation').value=measurementDraft?.measurementLocation??project().measurementLocation??'';
   const cg=curveGeometry(project(),results);
   $('curveIssues').hidden=!cg.issues.length;
   $('curveIssues').textContent=cg.issues.length?'竖曲线未应用（暂显示直坡，禁止导出）：'+cg.issues.join('；'):'';
@@ -86,7 +98,7 @@ function render(){
     input.onchange=()=>{try{const value=integer(input.value,'起道量');mutate(p=>p.controls[input.dataset.lift]=value);}catch(e){invalid(input,e.message);}};
     input.onkeydown=e=>{if(e.key==='Enter'){input.blur();}if(e.key==='Escape'){input.value=project().controls[input.dataset.lift];clearInvalid(input);input.blur();}};
   });
-  $('rows').innerHTML=results.map(r=>`<tr data-row="${r.id}" class="${selected.includes(r.id)?'controlrow':''} ${r.id===project().pendingControl?'pendingrow':''}"><td><input type="checkbox" aria-label="选择第 ${r.index+1} 个测点" data-select="${r.id}" ${selected.includes(r.id)?'checked':''}></td><td>${r.index+1}</td>${['feature','no','fore','back'].map(k=>`<td class="editable" tabindex="0" data-id="${r.id}" data-key="${k}">${escape(r[k])}</td>`).join('')}<td>${format(r.instrument)}</td><td>${format(r.measured)}</td><td class="${r.design===null?'undesign':''}">${format(r.design)}</td><td>${format(r.slope,1,'')}</td><td>${format(r.increment,1,'')}</td><td class="${r.lift===null?'undesign':r.lift<0?'negative':''}">${format(r.lift)}</td><td>${format(r.radius,0,'')}</td></tr>`).join('');
+  $('rows').innerHTML=results.map(r=>`<tr data-row="${r.id}" class="${selected.includes(r.id)?'controlrow':''} ${r.id===project().pendingControl?'pendingrow':''}"><td><input type="checkbox" aria-label="选择第 ${r.index+1} 个测点" data-select="${r.id}" ${selected.includes(r.id)?'checked':''}></td><td>${r.index+1}</td>${['feature','no','fore','back'].map(k=>`<td class="editable" tabindex="0" data-id="${r.id}" data-key="${k}">${escape(r[k])}</td>`).join('')}<td>${format(r.instrument)}</td><td>${format(r.measured)}</td><td class="${r.design===null?'undesign':''}">${format(r.design)}</td><td>${format(r.radius,0,'')}</td><td>${format(r.slope,1,'')}</td><td>${format(r.increment,1,'')}</td><td class="${r.lift===null?'undesign':r.lift<0?'negative':''}">${format(r.lift)}</td></tr>`).join('');
   document.querySelectorAll('[data-select]').forEach(i=>i.onclick=e=>{e.preventDefault();toggle(i.dataset.select);});
   document.querySelectorAll('td.editable').forEach(td=>{td.onclick=()=>edit(td);td.onkeydown=e=>{if(e.key==='Enter')edit(td);};});
   drawChart();

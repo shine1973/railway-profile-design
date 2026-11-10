@@ -1,6 +1,6 @@
 {
   "name": "railway-profile-design",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "description": "离线铁路纵断面拉坡设计",
   "author": "shine1973",
   "private": true,
@@ -19,7 +19,8 @@
     "test:desktop": "electron scripts/check-drag.cjs",
     "test:manual": "electron scripts/check-manual.cjs",
     "docs:images": "electron scripts/capture-manual.cjs",
-    "test:formulas": "node scripts/check-formulas.mjs"
+    "test:formulas": "node scripts/check-formulas.mjs",
+    "test:metadata": "electron scripts/check-metadata.cjs"
   },
   "build": {
     "appId": "com.shine1973.railway-profile-design",
