@@ -54,6 +54,19 @@ test('导出十列、原始数据、负值样式、真实可编辑散点图与�
   assert.equal(s.getCell('G2').value,'未设计');assert.equal(s.getCell('J3').value,-5);assert.equal(s.getCell('J3').font.color.argb,'FFDC3545');assert.equal(s.getCell('H4').value,null);assert.equal(s.getCell('H3').numFmt,'0.0');assert.equal(s.getCell('A2').value,'<岔心>');
   const zip=await JSZip.loadAsync(buffer),chart=await zip.file('xl/charts/chart1.xml').async('string');
   assert.match(chart,/<c:scatterChart>/);assert.match(chart,/'测量数据'|&apos;测量数据&apos;/);assert.match(chart,/<c:dispBlanksAs val="gap"/);
+  // WPS associates legend entries with physical series order: keep it aligned
+  // with idx/order so hiding entry 3 cannot hide the control points instead.
+  const seriesBlocks=[...chart.matchAll(/<c:ser>([\s\S]*?)<\/c:ser>/g)].map(m=>m[1]);
+  assert.deepEqual(seriesBlocks.map(s=>Number(s.match(/<c:idx val="(\d+)"/)[1])),[0,1,2,3]);
+  assert.match(seriesBlocks[3],/坐标网格（辅助）/);
+  assert.match(chart,/<c:legendEntry><c:idx val="3"\/><c:delete val="1"\/><\/c:legendEntry>/);
+  // Reserve separate vertical bands for plot/ticks, axis title and legend.
+  const plotLayout=chart.match(/<c:plotArea><c:layout>([\s\S]*?)<\/c:layout>/)[1];
+  assert.match(plotLayout,/<c:y val="0.16"\/>/);assert.match(plotLayout,/<c:h val="0.6"\/>/);
+  const xAxis=chart.match(/<c:valAx><c:axId val="100"\/>[\s\S]*?<\/c:valAx>/)[0];
+  assert.match(xAxis,/<c:y val="0.84"\/>/);
+  const legend=chart.match(/<c:legend>[\s\S]*?<\/c:legend>/)[0];
+  assert.match(legend,/<c:y val="0.92"\/>/);
   assert.match(chart,/\$F\$2:\$F\$5/);assert.match(chart,/\$G\$2:\$G\$5/);
   assert.match(await zip.file('xl/worksheets/sheet1.xml').async('string'),/<drawing r:id="rIdProfileChart"/);
   const imported=await importWorkbook(buffer,'test');assert.deepEqual(imported.points.map(p=>p.no),[0,0,2,3]);
