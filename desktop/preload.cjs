@@ -1,5 +1,6 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('desktop',{
+  openManual:()=>ipcRenderer.invoke('manual'),
   exportTemplate:()=>ipcRenderer.invoke('template'),
   importExcel:()=>ipcRenderer.invoke('import'),
   openProject:()=>ipcRenderer.invoke('open'),

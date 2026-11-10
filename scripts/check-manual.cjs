@@ -1,0 +1,50 @@
+const {app,BrowserWindow,ipcMain}=require('electron');
+const assert=require('node:assert/strict');
+const path=require('node:path');
+const fs=require('node:fs/promises');
+const {openManual}=require('../desktop/manual.cjs');
+const pause=()=>new Promise(r=>setTimeout(r,150));
+// All test windows remain hidden; no user project or desktop interaction.
+BrowserWindow.prototype.show=function(){};
+app.whenReady().then(async()=>{
+ try{
+  const w=new BrowserWindow({show:false,width:1440,height:960,webPreferences:{preload:path.join(__dirname,'../desktop/preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false}});
+  ipcMain.on('dirty',()=>{});
+  ipcMain.handle('manual',async()=>{await openManual(w);return {ok:true};});
+  await w.loadFile(path.join(__dirname,'../src/index.html'));
+  const js=code=>w.webContents.executeJavaScript(code);
+  await js(`document.getElementById('demo').click()`);await pause();
+  await js(`document.querySelector('[data-select="p1"]').click();document.querySelector('[data-select="p20"]').click()`);
+  const before=await js(`document.getElementById('rows').textContent`);
+  w.setSize(1000,800);await pause();
+  assert.equal(await js(`document.documentElement.scrollWidth<=innerWidth`),true);
+  await js(`document.getElementById('manual').click()`);
+  for(let i=0;i<30&&BrowserWindow.getAllWindows().length<2;i++)await pause();
+  const manual=BrowserWindow.getAllWindows().find(x=>x!==w);assert.ok(manual);
+  while(manual.webContents.isLoading())await pause();
+  const mjs=code=>manual.webContents.executeJavaScript(code);
+  await mjs(`Promise.all(Array.from(document.images).filter(i=>i.hasAttribute('src')).map(i=>i.decode()))`);
+  assert.equal(await mjs(`document.querySelectorAll('figure img').length`),5);
+  assert.equal(await mjs(`Array.from(document.querySelectorAll('figure img')).every(i=>i.complete&&i.naturalWidth>0)`),true);
+  assert.equal(await mjs(`Array.from(document.querySelectorAll('nav a')).every(a=>document.querySelector(a.getAttribute('href')))`),true);
+  await js(`document.getElementById('manual').click()`);await pause();assert.equal(BrowserWindow.getAllWindows().length,2);
+  const out=path.join(__dirname,'../dist/manual-review');await fs.mkdir(out,{recursive:true});
+  await fs.writeFile(path.join(out,'manual-wide.png'),(await manual.webContents.capturePage()).toPNG());
+  await mjs(`document.querySelector('nav a[href="#prepare"]').click()`);await pause();
+  assert.equal(await mjs(`location.hash`),'#prepare');
+  await fs.writeFile(path.join(out,'manual-data.png'),(await manual.webContents.capturePage()).toPNG());
+  await mjs(`document.querySelector('nav a[href="#design"]').click();document.querySelector('#design button.image').click()`);await pause();
+  assert.equal(await mjs(`document.getElementById('viewer').open`),true);
+  assert.ok(await mjs(`document.getElementById('largeImage').src.endsWith('/images/pending.png')`));
+  await fs.writeFile(path.join(out,'manual-image.png'),(await manual.webContents.capturePage()).toPNG());
+  manual.webContents.sendInputEvent({type:'keyDown',keyCode:'Escape'});manual.webContents.sendInputEvent({type:'keyUp',keyCode:'Escape'});await pause();
+  assert.equal(await mjs(`document.getElementById('viewer').open`),false);
+  manual.setSize(720,650);await mjs(`location.hash='start'`);await pause();
+  assert.equal(await mjs(`document.documentElement.scrollWidth<=innerWidth`),true);
+  await fs.writeFile(path.join(out,'manual-narrow.png'),(await manual.webContents.capturePage()).toPNG());
+  manual.close();await pause();
+  assert.equal(await js(`document.getElementById('rows').textContent`),before);
+  await js(`document.getElementById('manual').click()`);await pause();assert.equal(BrowserWindow.getAllWindows().length,2);
+  console.log('PASS: actual button/preload/IPC, local manual loaded, 5 images decoded, valid anchors, singleton/reopen, zoom image/Escape, 720px layout, project preserved');app.exit(0);
+ }catch(e){console.error(e);app.exit(1);}
+});

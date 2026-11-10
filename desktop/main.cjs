@@ -1,6 +1,7 @@
 const {app, BrowserWindow, ipcMain, dialog, Menu} = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const {openManual}=require('./manual.cjs');
 let win, dirty = false;
 const core = () => import('../src/core.js');
 const workbook = () => import('./workbook.js');
@@ -17,6 +18,7 @@ async function createWindow() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'线路拉坡',submenu:[{role:'about'},{type:'separator'},{role:'quit'}]},{label:'编辑',submenu:[{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]},{label:'视图',submenu:[{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{role:'togglefullscreen'}]}]));
   await win.loadFile(path.join(__dirname,'../src/index.html'));
 }
+ipcMain.handle('manual',respond(()=>openManual(win)));
 ipcMain.on('dirty',(_e,value)=>{dirty=Boolean(value);if(win)win.setDocumentEdited(dirty);});
 ipcMain.handle('import',respond(async()=>{
   const r=await dialog.showOpenDialog(win,{title:'导入测量 Excel',filters:[{name:'Excel 工作簿',extensions:['xlsx']}],properties:['openFile']});

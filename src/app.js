@@ -9,6 +9,7 @@ const project=()=>pan?.preview??history.current;
 const escape=s=>String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 function status(text){$('status').textContent=text;}
 function message(text,title='请检查'){ $('messageTitle').textContent=title;$('messageText').textContent=text;$('message').showModal(); }
+$('manual').onclick=async()=>{try{await request('openManual');}catch(e){message(e.message,'无法打开手册');}};
 $('messageClose').onclick=()=>$('message').close();
 function dirty(){return JSON.stringify(history.current)!==saved;}
 function mutate(fn){const p=structuredClone(project());fn(p);history.change(p);render();}
