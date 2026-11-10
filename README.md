@@ -1,6 +1,6 @@
 # 线路拉坡
 
-离线铁路纵断面测量与拉坡设计桌面应用。当前为 0.1.22 预览，支持 macOS Apple Silicon、Windows 10/11 x64。
+离线铁路纵断面测量与拉坡设计桌面应用。当前为 0.1.23 预览，支持 macOS Apple Silicon、Windows 10/11 x64。
 
 ## 使用
 
@@ -55,8 +55,10 @@ Mac 输出 DMG；Windows 输出免安装 ZIP。构建依赖需要联网下载，
 设计参考：[QGIS 面板、工具栏与画布组织](https://docs.qgis.org/3.44/en/docs/user_manual/introduction/qgis_gui.html)、[Ant Design 数据展示规范](https://ant.design/docs/spec/data-display/)。仅参考布局原则，自行实现本地 HTML/CSS，未引入第三方界面框架或在线资源。
 
 
-### 图文使用手册（0.1.22）
+### 图文使用手册（0.1.23）
 
 点击顶部“使用手册”打开独立的离线窗口，或直接打开 [使用指南](src/manual/index.html)。涵盖模板填写、转站、间距设置、独立两点拉坡、拖动与起道量、图表、结果编辑和文件保存导出；目录跳转、5张演示截图均可离线使用，点击图片可放大，Esc关闭大图。
 
 手册资源位于`src/manual/`，随Mac和Windows应用打包。截图仅用内置模拟数据，可运行`npm run docs:images`重新生成；`npm run test:manual`验证真实按钮、预加载桥接、独立窗口、图片、目录及项目状态保持。
+
+公式版导出将常用设置集中到“输入参数”，增加“坡段计算”“测点竖曲线”“公式分步说明”。每列提供中文批注与公式示例，参数及公式均可直接编辑；修改后结果与图表系列联动。

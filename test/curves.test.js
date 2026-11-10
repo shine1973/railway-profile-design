@@ -42,6 +42,26 @@ test('公式导出含完整计算链、缓存、动态负值、版本迁移和�
   assert.match(chart,/计算过程/);assert.match(chart,/strRef/);assert.equal(sheet.autoFilter,undefined);
   const old={...p,version:2};delete old.curves;assert.deepEqual(validateProject(old).curves,{});
 });
+test('分步公式可读可改：参数集中、短设计公式、计算说明与中文表头批注',async()=>{
+ const p=curveFixture(),book=new ExcelJS.Workbook();
+ await book.xlsx.load(await exportWorkbook(p,{formulas:true}));
+ const input=book.getWorksheet('输入参数'),main=book.getWorksheet('测量数据'),steps=book.getWorksheet('测点竖曲线');
+ assert.equal(input.getCell('B2').value,6);assert.equal(input.getCell('B7').value,0);
+ assert.equal(input.getCell('H6').value,10000);assert.equal(input.getCell('E7').formula,'D7+B7');
+ assert.equal(main.getCell('G52').formula,"'测点竖曲线'!Q52");
+ assert.equal(steps.getCell('P52').formula,'(H52+O52)*1000');
+ assert.ok(steps.getCell('O1').note.includes('避免大半径'));
+ assert.equal(book.getWorksheet('坡段计算').getCell('K2').formula,'I2/(C2-B2)');
+ for(const name of ['测点竖曲线','坡段计算','计算过程','竖曲线参数']){
+   const sheet=book.getWorksheet(name);
+   sheet.getRow(1).eachCell(cell=>assert.ok(cell.note,`${name} ${cell.address} needs explanation`));
+   sheet.eachRow(row=>row.eachCell(cell=>{if(cell.formula)assert.ok(cell.formula.length<150,`${name} ${cell.address}: formula too long`);}));
+ }
+ const explanation=book.getWorksheet('公式分步说明');assert.ok(explanation.rowCount>60);
+ assert.ok(explanation.getColumn(4).values.some(v=>typeof v==='string'&&v.startsWith('=')));
+ const z=await JSZip.loadAsync(await exportWorkbook(p,{formulas:true}));
+ for(const file of Object.keys(z.files).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n)))assert.doesNotMatch(await z.file(file).async('string'),/<sheetProtection/);
+});
 test('独立前后坡段延长线交点位于测点之间：仅显式连接、精确曲线范围和半径列',async()=>{
  const p=curveFixture();p.controls={p0:200,p20:128,p70:70,p100:178};p.segments=[['p0','p20'],['p70','p100']];p.curves={};
  assert.equal(calculate(p)[50].design,null);
