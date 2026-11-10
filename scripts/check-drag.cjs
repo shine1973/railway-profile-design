@@ -122,7 +122,12 @@ app.whenReady().then(async()=>{
  await js(`document.getElementById('controls').scrollTop=0;`);
  await require('node:fs/promises').writeFile('/tmp/railway-v18-preview.png',(await w.webContents.capturePage()).toPNG());
  assert.equal(await js(`document.getElementById('lineType')===null&&document.getElementById('lineSpeed')===null`),true);
- await js(`document.getElementById('measurementDate').value='2026-11-10';document.getElementById('measurementDate').dispatchEvent(new Event('change'));document.getElementById('measurementLocation').value='演示测量地点';document.getElementById('measurementLocation').dispatchEvent(new Event('change'));document.querySelector('[data-recommend]').click();`);
+ await js(`document.getElementById('measurementDate').value='2026-11-10';document.getElementById('measurementDate').dispatchEvent(new Event('change'));document.getElementById('measurementLocation').value='演示测量地点';document.getElementById('measurementLocation').dispatchEvent(new Event('change'));`);
+ if(!await js(`Boolean(document.querySelector('[data-recommend]'))`)){
+   assert.match(await js(`document.getElementById('curves').textContent`),/手动调整控制点/);
+   await js(`for(const id of Array.from(document.querySelectorAll('[data-lift]'),el=>el.dataset.lift)){const input=document.querySelector('[data-lift="'+id+'"]');input.value=Number(input.value)+1000;input.dispatchEvent(new Event('change'));}`);
+ }
+ await js(`document.querySelector('[data-recommend]').click();`);
  assert.equal(await js(`document.getElementById('curveIssues').hidden`),true);
  assert.ok(Number(await js(`document.querySelector('[data-radius]').value`))>0);
  assert.match(await js(`document.getElementById('curves').textContent`),/可容纳最大半径/);

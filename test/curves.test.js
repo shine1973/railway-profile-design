@@ -80,3 +80,22 @@ test('测量日期地点保存往返、旧版迁移和两种Excel导出',async()
  assert.equal(validateProject({...p,version:5}).measurementDate,'');
  for(const formulas of [false,true]){const b=new ExcelJS.Workbook();await b.xlsx.load(await exportWorkbook(p,{formulas}));const s=b.getWorksheet('测量数据');assert.equal(s.getCell('M1').value,p.measurementDate);assert.equal(s.getCell('O1').value,p.measurementLocation);assert.equal(b.getWorksheet('参数').getCell('W2').value,p.measurementLocation);}
 });
+
+test('只起不落：凸形减小半径避开实测凸起，推荐不改动控制点及既有半径',()=>{
+ const p=curveFixture();p.controls={p0:0,p50:40,p100:0};p.points[45].fore=965;
+ const before=structuredClone(p),s=recommendRadius(p,calculate(p),'p50');
+ assert.ok(s.radius>0&&s.radius<s.maximum*.8);assert.deepEqual(p,before);
+ p.curves.p50=s.radius;assert.ok(calculate(p).every(r=>r.lift>=-1e-7));
+});
+test('只起不落：直坡上无法消除的负值给出欠缺量和测点，不修改项目',()=>{
+ const p=curveFixture();p.controls={p0:0,p50:40,p100:0};p.points[5].fore=900;
+ const before=structuredClone(p),s=recommendRadius(p,calculate(p),'p50');
+ assert.equal(s.radius,undefined);assert.ok(s.maximum>0);assert.match(s.reason,/手动调整控制点/);
+ assert.equal(s.shortfall.index,5);assert.equal(s.shortfall.no,3);assert.ok(s.shortfall.deficit>90);assert.deepEqual(p,before);
+});
+test('只起不落：凹形需要足够大的半径；现有负值与手动输入保持可用',()=>{
+ const p=curveFixture();p.points[50].fore=980;p.controls.p50=-20;
+ const s=recommendRadius(p,calculate(p),'p50');assert.ok(s.radius>0);
+ p.curves.p50=s.radius;assert.ok(calculate(p).every(r=>r.lift>=-1e-7));
+ p.curves.p50=1;assert.ok(calculate(p)[50].lift<0);assert.deepEqual(validateProject(p),p);
+});

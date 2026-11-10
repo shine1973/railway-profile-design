@@ -36,7 +36,7 @@ export function curveHeight(c,x) {
   return (c.startY+c.sign*(u*u-u0*u0)/(q+q0))*1000;
 }
 
-// Geometry-only limit and a rounded-down usable value. No percentage discount.
+// Geometric limit and lift-only rounded candidates. Never change project data.
 // Values are whole metres, with at most two significant digits; not a standards check.
 export function recommendRadius(project,rows,id){
   const candidates=junctions(project),position=candidates.findIndex(j=>j.id===id);
@@ -51,10 +51,31 @@ export function recommendRadius(project,rows,id){
   const maximum=Math.min((current.x-left)/(k*Math.cos(t1)),(right-current.x)/(k*Math.cos(t2)));
   if(!Number.isFinite(maximum)||maximum<.001)return {reason:'交点两侧没有足够空间，请调整坡段'};
   if(maximum<1)return {maximum,reason:'可容纳最大半径不足1 m，没有正整数几何可用值；仍可手动填写小数'};
-  const target=Math.min(maximum,10000000),unit=10**Math.max(0,Math.floor(Math.log10(target))-1);
-  const radius=Number((Math.floor(target/unit)*unit).toPrecision(12));
-  if(radius<.001)return {reason:'可用空间过小，请调整坡段'};
-  const check=curveGeometry({...project,curves:{...project.curves,[id]:radius}},rows);
-  if(check.issues.length)return {reason:'当前坡段组合存在几何冲突'};
-  return {radius,maximum,inputLimit:10000000,start:current.x-radius*k*Math.cos(t1),end:current.x+radius*k*Math.cos(t2)};
+  // Search every supported rounded integer, largest first. Concave curves can
+  // need a larger radius, convex curves a smaller one: do not assume one direction.
+  const values=[];
+  for(let unit=1;unit<=1000000;unit*=10)for(let n=1;n<100;n++){
+    const r=n*unit;if(r<=maximum&&r<=10000000)values.push(r);
+  }
+  const affected=rows.filter(r=>r.distance>=current.from&&r.distance<=current.to);
+  let best=null;
+  for(const radius of [...new Set(values)].sort((a,b)=>b-a)){
+    const check=curveGeometry({...project,curves:{...project.curves,[id]:radius}},rows);
+    if(check.issues.length)continue;
+    const c=check.curves.find(c=>c.id===id);
+    let worst=null;
+    for(const row of affected){
+      const x=row.distance;
+      let height=x<c.start?(c.y+c.m1*(x-c.x))*1000:x>c.end?(c.y+c.m2*(x-c.x))*1000:curveHeight(c,x);
+      // Preserve adjacent enabled arcs where they occupy the shared straight segment.
+      for(const neighbor of other.curves)if(x>=neighbor.start&&x<=neighbor.end)height=curveHeight(neighbor,x);
+      const deficit=row.measured-height;
+      if(!worst||deficit>worst.deficit)worst={deficit,index:row.index,no:row.no};
+    }
+    if(!worst||worst.deficit<=1e-7)return {radius,maximum,inputLimit:10000000,start:c.start,end:c.end};
+    if(!best||worst.deficit<best.deficit)best={...worst,radius};
+  }
+  return {maximum,shortfall:best,reason:best
+    ?`没有满足只起不落的取整半径，请手动调整控制点。候选值中最小的最大欠缺量 ${(Math.ceil(best.deficit*10)/10).toFixed(1)} mm（现场点号 ${best.no} · 记录序号 ${best.index+1}，试算半径 ${best.radius} m）`
+    :'当前坡段组合存在几何冲突，请手动调整控制点'};
 }
