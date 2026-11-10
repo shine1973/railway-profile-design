@@ -4,3 +4,5 @@
 @media(max-width:1150px){th,td{padding-left:7px;padding-right:7px}}
 
 .tablecard th,.tablecard td,.tablecard td.editable input{text-align:center;vertical-align:middle}
+
+.segmenthint{padding:8px 0;color:#217f8c;line-height:1.7}.segmenthint button,.segmentitem button{font-size:11px;padding:3px 6px}.segmentitem{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #edf1f3;margin-bottom:6px;font-size:11px}

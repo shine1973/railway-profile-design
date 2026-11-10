@@ -35,7 +35,19 @@ app.whenReady().then(async()=>{
  const before=await point(0);
  const blank=await js(`(()=>{const r=document.getElementById('chart').getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+3)}})()`);
  await drag(blank,{x:blank.x-70,y:blank.y});assert.deepEqual(await selected(),['p3','p20']);assert.notEqual((await point(0)).x,before.x);
- console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation');
+ await js(`document.getElementById('clear').click();document.getElementById('fit').click();document.querySelector('[data-select="p1"]').click();document.querySelector('[data-select="p2"]').click();document.querySelector('[data-select="p3"]').click();`);
+ assert.equal(await js(`document.querySelector('[data-row="p3"]').children[8].textContent`),'未设计');
+ await js(`document.querySelector('[data-select="p4"]').click()`);
+ assert.equal(await js(`document.querySelectorAll('[data-segment]').length`),2);
+ assert.equal(await js(`(document.querySelector('#chart path[stroke="#df9e3d"]').getAttribute('d').match(/M/g)||[]).length`),2);
+ assert.equal(await js(`document.querySelector('[data-row="p2"]').children[9].textContent`),'');
+ await js(`document.querySelector('[data-select="p10"]').click();document.querySelector('[data-select="p15"]').click()`);
+ assert.equal(await js(`document.querySelector('[data-row="p7"]').children[8].textContent`),'未设计');
+ await js(`document.querySelector('[data-segment="1"]').click()`);
+ assert.deepEqual(await selected(),['p1','p2','p10','p15']);
+ await js(`document.querySelector('[data-select="p8"]').click();document.getElementById('cancelPending').click()`);
+ assert.deepEqual(await selected(),['p1','p2','p10','p15']);
+ console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal');
  app.exit(0);
  }catch(e){console.error(e);app.exit(1);}
 });

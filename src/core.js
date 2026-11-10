@@ -28,10 +28,10 @@ export function parseRows(rows) {
   return points;
 }
 export function newProject(points = [], name = '未命名项目') {
-  return {format: 'railway-profile', version: 1, name, sleepers: 6, points, controls: {}};
+  return {format: 'railway-profile', version: 2, name, sleepers: 6, points, controls: {}, segments: [], pendingControl: null};
 }
 export function validateProject(raw) {
-  if (!raw || raw.format !== 'railway-profile' || raw.version !== 1) throw new Error('不是受支持的线路拉坡项目（版本 1）');
+  if (!raw || raw.format !== 'railway-profile' || ![1,2].includes(raw.version)) throw new Error('不是受支持的线路拉坡项目（版本 1/2）');
   const sleepers = integer(raw.sleepers, '轨枕根数');
   if (sleepers < 1 || sleepers > 1000) throw new Error('轨枕根数应为 1 至 1000 的整数');
   if (!Array.isArray(raw.points) || raw.points.length > 10000) throw new Error('项目测点格式错误或超过 10000 点');
@@ -48,7 +48,20 @@ export function validateProject(raw) {
     if (!ids.has(id)) throw new Error('控制点对应的测点不存在');
     controls[id] = integer(lift, '控制点起道量');
   }
-  return {...newProject(points, String(raw.name ?? '未命名项目')), sleepers, controls};
+  const project={...newProject(points,String(raw.name??'未命名项目')),sleepers,controls};
+  if(raw.version===1){
+    project.segments=designSegments({...project,version:1});
+    project.pendingControl=Object.keys(controls).length===1?Object.keys(controls)[0]:null;
+  }else{
+    if(!Array.isArray(raw.segments)||raw.segments.length>10000)throw new Error('坡段数据无效');
+    project.segments=raw.segments.map(s=>{if(!Array.isArray(s)||s.length!==2)throw new Error('坡段应包含两个端点');return [...s];});
+    project.pendingControl=raw.pendingControl??null;
+    if(project.pendingControl!==null&&!Object.hasOwn(controls,project.pendingControl))throw new Error('待选坡段端点无效');
+  }
+  if(!validSegments(project))throw new Error('坡段端点无效、重复或存在重叠');
+  const used=new Set(project.segments.flat());if(project.pendingControl)used.add(project.pendingControl);
+  if(Object.keys(controls).some(id=>!used.has(id)))throw new Error('控制点未关联坡段');
+  return project;
 }
 export function calculate(project) {
   const step = project.sleepers * 0.6;
@@ -59,9 +72,9 @@ export function calculate(project) {
     if (p.back !== null) hi = measured + p.back;
     return r;
   });
-  const controls = result.filter(p => Object.hasOwn(project.controls, p.id));
-  for (let s = 0; s + 1 < controls.length; s++) {
-    const a = controls[s], b = controls[s + 1];
+  const byId=new Map(result.map(r=>[r.id,r]));
+  const segments=designSegments(project).map(([a,b])=>[byId.get(a),byId.get(b)]).map(([a,b])=>a.index<b.index?[a,b]:[b,a]).sort((a,b)=>a[0].index-b[0].index);
+  for (const [a,b] of segments) {
     const ya = a.measured + project.controls[a.id], yb = b.measured + project.controls[b.id];
     const increment = (yb - ya) / (b.index - a.index);
     for (let i = a.index; i <= b.index; i++) {
@@ -87,11 +100,52 @@ export function round(value, digits = 0) {
   const r = Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * scale) / scale;
   return Object.is(r, -0) ? 0 : r;
 }
-export function moveControl(project, fromId, toId) {
-  if(fromId===toId || !Object.hasOwn(project.controls,fromId) || Object.hasOwn(project.controls,toId) || !project.points.some(p=>p.id===toId))return false;
-  project.controls[toId]=project.controls[fromId];
-  delete project.controls[fromId];
-  return true;
+export function designSegments(project) {
+  if(project.version===1){
+    const ids=project.points.filter(p=>Object.hasOwn(project.controls,p.id)).map(p=>p.id);
+    return ids.slice(1).map((id,i)=>[ids[i],id]);
+  }
+  return project.segments;
+}
+function validSegments(project) {
+  const indexes=new Map(project.points.map((p,i)=>[p.id,i]));
+  const ranges=[];
+  for(const [a,b] of project.segments){
+    if(a===b||!indexes.has(a)||!indexes.has(b)||!Object.hasOwn(project.controls,a)||!Object.hasOwn(project.controls,b))return false;
+    ranges.push([Math.min(indexes.get(a),indexes.get(b)),Math.max(indexes.get(a),indexes.get(b))]);
+  }
+  ranges.sort((a,b)=>a[0]-b[0]);
+  return ranges.every((r,i)=>!i||r[0]>=ranges[i-1][1]);
+}
+function pruneControls(project){
+  const used=new Set(project.segments.flat());if(project.pendingControl)used.add(project.pendingControl);
+  for(const id of Object.keys(project.controls))if(!used.has(id))delete project.controls[id];
+}
+export function cancelPending(project){project.pendingControl=null;pruneControls(project);}
+export function pickEndpoint(project,id){
+  if(!project.points.some(p=>p.id===id))throw new Error('测点不存在');
+  if(project.pendingControl===id){cancelPending(project);return;}
+  const from=project.pendingControl;
+  const next={...project,controls:{...project.controls,[id]:project.controls[id]??0},segments:project.segments.map(s=>[...s])};
+  if(from){
+    next.segments.push([from,id]);
+    if(!validSegments(next))throw new Error('这一段与已有坡段重叠，请另选端点；连续坡段可共用边界点');
+    next.pendingControl=null;
+  }else next.pendingControl=id;
+  Object.assign(project,next);
+}
+export function removeSegment(project,index){project.segments.splice(index,1);pruneControls(project);}
+export function removeControl(project,id){
+  project.segments=project.segments.filter(s=>!s.includes(id));
+  if(project.pendingControl===id)project.pendingControl=null;
+  delete project.controls[id];pruneControls(project);
+}
+export function moveControl(project,fromId,toId){
+  if(fromId===toId||!Object.hasOwn(project.controls,fromId)||Object.hasOwn(project.controls,toId)||!project.points.some(p=>p.id===toId))return false;
+  const next={...project,controls:{...project.controls,[toId]:project.controls[fromId]},segments:project.segments.map(s=>s.map(id=>id===fromId?toId:id)),pendingControl:project.pendingControl===fromId?toId:project.pendingControl};
+  delete next.controls[fromId];
+  if(!validSegments(next))return false;
+  Object.assign(project,next);return true;
 }
 export function format(value, digits = 0, missing = '未设计') {
   if (value === null || value === undefined) return missing;

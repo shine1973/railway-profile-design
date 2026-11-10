@@ -18,7 +18,7 @@ test('坐标加密随可用空间适配，数字留距且放大后显示每个�
 
 test('全区段统一正高程基准，起道量和高差不变',()=>{
   const p=newProject([{id:'p1',no:-2,fore:1200,back:null},{id:'p2',no:-2,fore:1600,back:null}]);
-  p.controls={p1:0,p2:-200};const rows=calculate(p),offset=displayOffset(rows,p.controls);
+  p.controls={p1:0,p2:-200};p.segments=[['p1','p2']];const rows=calculate(p),offset=displayOffset(rows,p.controls);
   assert.equal(offset,300);
   for(const r of rows){assert.ok(r.measured+offset>=0);assert.ok(r.design+offset>=0);assert.equal((r.design+offset)-(r.measured+offset),r.lift);}
   const a=elevationAxis(rows.flatMap(r=>[r.measured+offset,r.design+offset]));
