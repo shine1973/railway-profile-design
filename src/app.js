@@ -56,7 +56,7 @@ function render(){
   const cg=curveGeometry(project(),results);
   $('curveIssues').hidden=!cg.issues.length;
   $('curveIssues').textContent=cg.issues.length?'竖曲线未应用（暂显示直坡，禁止导出）：'+cg.issues.join('；'):'';
-  $('curves').innerHTML='<h3 class="paneltitle">竖曲线 <span>圆曲线</span></h3><p class="hint">在共用端点填写半径启用，留空关闭。半径单位 m。暂无已核实的规范推荐值。<br>端点起道设置对应直坡交点；最终起道量见表格。</p>'+junctions(project()).map(j=>{const r=results.find(r=>r.id===j.id),c=cg.curves.find(c=>c.id===j.id);return `<div class="controlitem"><label>序号 ${r.index+1} · R <input data-radius="${j.id}" aria-label="序号 ${r.index+1} 竖曲线半径" type="number" min="0.001" max="10000000" step="any" placeholder="未设置" value="${project().curves?.[j.id]??''}"> m</label>${c?`<small>起点距 ${c.start.toFixed(2)} m · 终点距 ${c.end.toFixed(2)} m<br>弧长 ${c.length.toFixed(2)} m · ${c.sign>0?'凹形':'凸形'}</small>`:''}</div>`;}).join('');
+  $('curves').innerHTML='<h3 class="paneltitle">竖曲线 <span>圆曲线</span></h3><p class="hint">选择前后坡段组合并填写半径启用，留空关闭。交点由两坡延长线计算，可位于测点之间。半径单位 m。暂无已核实的规范推荐值。<br>端点起道设置确定两条直坡线；最终起道量见表格。</p>'+junctions(project()).map(j=>{const c=cg.curves.find(c=>c.id===j.id);return `<div class="controlitem"><label>坡段 ${j.leftIndex+1} → ${j.rightIndex+1} · R <input data-radius="${j.id}" aria-label="坡段 ${j.leftIndex+1} 到 ${j.rightIndex+1} 竖曲线半径" type="number" min="0.001" max="10000000" step="any" placeholder="未设置" value="${project().curves?.[j.id]??''}"> m</label>${c?`<small>交点距 ${c.x.toFixed(2)} m · 交点高程 ${(c.y*1000).toFixed(1)} mm<br>起点距 ${c.start.toFixed(2)} m · 终点距 ${c.end.toFixed(2)} m<br>弧长 ${c.length.toFixed(2)} m · ${c.sign>0?'凹形':'凸形'}</small>`:''}</div>`;}).join('');
   document.querySelectorAll('[data-radius]').forEach(input=>input.onchange=()=>{const value=input.value===''?null:Number(input.value);if(value!==null&&(!Number.isFinite(value)||value<=0||value>10000000)){invalid(input,'半径须大于0且不超过10000000 m');return;}mutate(p=>{p.curves??={};if(value===null)delete p.curves[input.dataset.radius];else p.curves[input.dataset.radius]=value;});});
   $('projectName').value=project().name;$('sleepers').value=project().sleepers;$('spacing').textContent=(project().sleepers*.6).toFixed(1)+' m';
   const selected=Object.keys(project().controls), designed=results.filter(r=>r.design!==null), negative=designed.filter(r=>r.lift<0);
@@ -86,7 +86,7 @@ function render(){
     input.onchange=()=>{try{const value=integer(input.value,'起道量');mutate(p=>p.controls[input.dataset.lift]=value);}catch(e){invalid(input,e.message);}};
     input.onkeydown=e=>{if(e.key==='Enter'){input.blur();}if(e.key==='Escape'){input.value=project().controls[input.dataset.lift];clearInvalid(input);input.blur();}};
   });
-  $('rows').innerHTML=results.map(r=>`<tr data-row="${r.id}" class="${selected.includes(r.id)?'controlrow':''} ${r.id===project().pendingControl?'pendingrow':''}"><td><input type="checkbox" aria-label="选择第 ${r.index+1} 个测点" data-select="${r.id}" ${selected.includes(r.id)?'checked':''}></td><td>${r.index+1}</td>${['feature','no','fore','back'].map(k=>`<td class="editable" tabindex="0" data-id="${r.id}" data-key="${k}">${escape(r[k])}</td>`).join('')}<td>${format(r.instrument)}</td><td>${format(r.measured)}</td><td class="${r.design===null?'undesign':''}">${format(r.design)}</td><td>${format(r.slope,1,'')}</td><td>${format(r.increment,1,'')}</td><td class="${r.lift===null?'undesign':r.lift<0?'negative':''}">${format(r.lift)}</td></tr>`).join('');
+  $('rows').innerHTML=results.map(r=>`<tr data-row="${r.id}" class="${selected.includes(r.id)?'controlrow':''} ${r.id===project().pendingControl?'pendingrow':''}"><td><input type="checkbox" aria-label="选择第 ${r.index+1} 个测点" data-select="${r.id}" ${selected.includes(r.id)?'checked':''}></td><td>${r.index+1}</td>${['feature','no','fore','back'].map(k=>`<td class="editable" tabindex="0" data-id="${r.id}" data-key="${k}">${escape(r[k])}</td>`).join('')}<td>${format(r.instrument)}</td><td>${format(r.measured)}</td><td class="${r.design===null?'undesign':''}">${format(r.design)}</td><td>${format(r.slope,1,'')}</td><td>${format(r.increment,1,'')}</td><td class="${r.lift===null?'undesign':r.lift<0?'negative':''}">${format(r.lift)}</td><td>${format(r.radius,0,'')}</td></tr>`).join('');
   document.querySelectorAll('[data-select]').forEach(i=>i.onclick=e=>{e.preventDefault();toggle(i.dataset.select);});
   document.querySelectorAll('td.editable').forEach(td=>{td.onclick=()=>edit(td);td.onkeydown=e=>{if(e.key==='Enter')edit(td);};});
   drawChart();
@@ -119,6 +119,13 @@ function drawChart(){
     if($('labelLift').checked&&r.lift!==null)texts.push(format(r.lift)+' mm');
     return texts.length?[{id:r.id,x:left+(r.index+1-view.min)/(view.max-view.min)*(width-left-right),text:texts.join(' · '),value:r.measured,negative:r.lift!==null&&r.lift<0}]:[];
   });
+  const labelCurves=curveGeometry(project(),results);
+  if($('labelFeature').checked&&!labelCurves.issues.length)labelCurves.curves.forEach((c,i)=>{
+    for(const [distance,name] of [[c.start,'竖曲线起点'],[c.end,'竖曲线终点']]){
+      const sequence=distance/(project().sleepers*.6)+1;
+      if(sequence>=view.min&&sequence<=view.max)labelItems.push({id:`curve-${i}-${name}`,x:left+(sequence-view.min)/(view.max-view.min)*(width-left-right),text:`${name} ${i+1}`,value:curveHeight(c,distance),negative:false});
+    }
+  });
   const labelLayout=layoutLabels(labelItems,left,width-right,text=>labelMeasure.measureText(text).width);
   const height=340+labelLayout.height,top=30+labelLayout.height;
   const desiredHeight=height+'px';if(svg.parentElement.style.height!==desiredHeight)svg.parentElement.style.height=desiredHeight;
@@ -137,6 +144,11 @@ function drawChart(){
     group.append(node('path',{d,fill:'none',stroke:color,'stroke-width':field==='design'?2.5:1.8,'stroke-linejoin':'round'}));
   }
   const curveState=curveGeometry(project(),results);
+  if(!curveState.issues.length)for(const c of curveState.curves){
+    const sx=d=>x(d/(project().sleepers*.6)+1),ix=sx(c.x),iy=y(c.y*1000);
+    group.append(node('path',{d:`M${sx(c.start)},${y(curveHeight(c,c.start))} L${ix},${iy} L${sx(c.end)},${y(curveHeight(c,c.end))}`,fill:'none',stroke:'#b39767','stroke-dasharray':'4 4','stroke-width':1,'pointer-events':'none'}));
+    const cross=node('path',{d:`M${ix-3},${iy-3}L${ix+3},${iy+3}M${ix-3},${iy+3}L${ix+3},${iy-3}`,stroke:'#b39767','stroke-width':1,'pointer-events':'none'});cross.append(node('title',{},`坡线延长交点 · ${c.x.toFixed(2)} m`));group.append(cross);
+  }
   if(!curveState.issues.length)for(const c of curveState.curves)for(const [distance,name] of [[c.start,'竖曲线起点'],[c.end,'竖曲线终点']]){
     const sequence=distance/(project().sleepers*.6)+1;
     const marker=node('circle',{cx:x(sequence),cy:y(curveHeight(c,distance)),r:4,fill:'#fff',stroke:'#df9e3d','stroke-width':1.5,'pointer-events':'none'});

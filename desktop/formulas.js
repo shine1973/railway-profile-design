@@ -14,6 +14,7 @@ export function addFormulas(book,project,rows,model,options) {
   put(params,'D4',`10-MIN('计算过程'!C2:C${n})`,rows[0].datum);
   params.getCell('D2').dataValidation={type:'whole',operator:'between',formulae:[1,1000],showErrorMessage:true,error:'请输入1至1000的整数'};
   for(const [id,i] of controls){params.getCell(`D${i}`).dataValidation={type:'whole',operator:'between',formulae:[-100000000,100000000],showErrorMessage:true,error:'起道设置须为整毫米'};}
+  const geometry=curveGeometry(project,rows);
   const segments=designSegments(project).map(s=>s.map(id=>rows.find(r=>r.id===id)).sort((a,b)=>a.index-b.index));
   for(const r of rows){
     const i=r.index+2;
@@ -24,22 +25,25 @@ export function addFormulas(book,project,rows,model,options) {
     put(main,`F${i}`,`E${i}-C${i}`,r.measured);
     put(params,`A${i}`,`(B${i}-1)*$D$3`,r.distance);
     const seg=segments.find(([a,b])=>r.index>=a.index&&r.index<=b.index);
-    if(seg){const [a,b]=seg;const formula=`${target(a.id)}+(${target(b.id)}-${target(a.id)})*${r.index-a.index}/${b.index-a.index}`;
+    const pairIndex=geometry.curves.findIndex(c=>r.distance>=c.from&&r.distance<=c.to);
+    if(pairIndex>=0){const c=geometry.curves[pairIndex],j=pairIndex+2,x=`'参数'!A${i}`;
+      put(helper,`D${i}`,`('竖曲线参数'!D${j}+IF(${x}<'竖曲线参数'!C${j},'竖曲线参数'!E${j},'竖曲线参数'!F${j})*(${x}-'竖曲线参数'!C${j}))*1000`,(c.y+(r.distance<c.x?c.m1:c.m2)*(r.distance-c.x))*1000);
+    } else if(seg){const [a,b]=seg;const formula=`${target(a.id)}+(${target(b.id)}-${target(a.id)})*${r.index-a.index}/${b.index-a.index}`;
       const value=a.measured+project.controls[a.id]+(b.measured+project.controls[b.id]-a.measured-project.controls[a.id])*(r.index-a.index)/(b.index-a.index);
       put(helper,`D${i}`,formula,value);
     } else helper.getCell(`D${i}`).value='未设计';
   }
-  const geometry=curveGeometry(project,rows);
   const curves=book.addWorksheet('竖曲线参数');
-  curves.addRow(['变坡点序号','半径 m（可改）','交点距离 m','交点高程 m','前坡比','后坡比','前坡角','后坡角','方向','切线长 m','起点距离 m','终点距离 m','起点高程 m','圆心横坐标 m','圆心高程 m','几何有效','弧长 m']);
+  curves.addRow(['前后坡段','半径 m（可改）','交点距离 m','交点高程 m','前坡比','后坡比','前坡角','后坡角','方向','切线长 m','起点距离 m','终点距离 m','起点高程 m','圆心横坐标 m','圆心高程 m','几何有效','弧长 m']);
   geometry.curves.forEach((c,k)=>{
-    const i=k+2,v=rows.find(r=>r.id===c.id),a=rows.find(r=>r.id===c.a),b=rows.find(r=>r.id===c.b);
-    curves.getCell(`A${i}`).value=v.index+1;curves.getCell(`B${i}`).value=c.radius;
+    const i=k+2,a=rows.find(r=>r.id===c.a),b=rows.find(r=>r.id===c.b),le=rows.find(r=>r.id===c.leftEnd),rs=rows.find(r=>r.id===c.rightStart);
+    const x=r=>`'参数'!A${r.index+2}`;
+    curves.getCell(`A${i}`).value=`坡段 ${c.leftIndex+1} → ${c.rightIndex+1}`;curves.getCell(`B${i}`).value=c.radius;
     curves.getCell(`B${i}`).dataValidation={type:'decimal',operator:'between',formulae:[.001,10000000],showErrorMessage:true,error:'半径须大于0且不超过10000000米'};
-    put(curves,`C${i}`,`'参数'!A${v.index+2}`,v.distance);
-    put(curves,`D${i}`,`${target(c.id)}/1000`,(v.measured+project.controls[c.id])/1000);
-    put(curves,`E${i}`,`(D${i}-${target(c.a)}/1000)/(C${i}-'参数'!A${a.index+2})`,c.m1);
-    put(curves,`F${i}`,`(${target(c.b)}/1000-D${i})/('参数'!A${b.index+2}-C${i})`,c.m2);
+    put(curves,`E${i}`,`(${target(c.leftEnd)}-${target(c.a)})/1000/(${x(le)}-${x(a)})`,c.m1);
+    put(curves,`F${i}`,`(${target(c.b)}-${target(c.rightStart)})/1000/(${x(b)}-${x(rs)})`,c.m2);
+    put(curves,`C${i}`,`(${target(c.rightStart)}/1000-${target(c.a)}/1000+E${i}*${x(a)}-F${i}*${x(rs)})/(E${i}-F${i})`,c.x);
+    put(curves,`D${i}`,`${target(c.a)}/1000+E${i}*(C${i}-${x(a)})`,c.y);
     put(curves,`G${i}`,`ATAN(E${i})`,Math.atan(c.m1));put(curves,`H${i}`,`ATAN(F${i})`,Math.atan(c.m2));
     put(curves,`I${i}`,`SIGN(H${i}-G${i})`,c.sign);
     put(curves,`J${i}`,`B${i}*TAN(ABS(H${i}-G${i})/2)`,c.tangent);
@@ -63,6 +67,10 @@ export function addFormulas(book,project,rows,model,options) {
         const y=`(${ref('M')}+${ref('I')}*(${u}^2-${u0}^2)/(SQRT(MAX(0,${ref('B')}^2-${u}^2))+SQRT(MAX(0,${ref('B')}^2-${u0}^2))))*1000`;
         expr=`IF(AND(${match}>0,${x}<=${ref('L')}),${y},${expr})`;
       }
+      if(geometry.curves.length){
+        const last=geometry.curves.length+1,idx=`MAX(1,'计算过程'!F${i})`;
+        put(main,`K${i}`,`IF(AND('计算过程'!F${i}>0,'参数'!A${i}<=INDEX('竖曲线参数'!$L$2:$L$${last},${idx})),INDEX('竖曲线参数'!$B$2:$B$${last},${idx}),"")`,r.radius??'');
+      }
       if(geometry.curves.length)expr=`IF(COUNTIF('竖曲线参数'!P2:P${geometry.curves.length+1},FALSE)>0,NA(),${expr})`;
     }
     put(main,`G${i}`,expr,r.design??'未设计');
@@ -85,7 +93,7 @@ export function addFormulas(book,project,rows,model,options) {
     '公式成果：修改输入后由 Excel / WPS 自动重算；如处于手动计算模式，请执行重新计算。',
     '可修改：测量数据前四列；参数表 D2 轨枕根数、D6起的控制点起道量；竖曲线参数 B列半径。蓝色单元格为参数输入。',
     '坡段拓扑和控制点记录序号固定。增删记录、移动端点、增删坡段或竖曲线，请返回软件操作并重新导出。',
-    '橙色控制点为直坡交点目标，竖曲线可能不经过该点；实际起道量以测量数据 J列为准。',
+    '前后坡段各由两个测点确定，竖曲线交点由坡线延长计算；实际起道量以测量数据 J列为准。',
     '竖曲线参数 P列为FALSE表示越界、重叠、半径无效或两坡相同；设计结果显示#N/A，请调整后再使用。此项仅为几何检查，不代表符合规范。',
     '图表沿用导出时的显示范围和刻度。修改输入后系列随公式更新；如超出坐标范围，请在Excel/WPS中调整坐标轴。',
     '高程和起道量显示整毫米；坡度和递增量显示一位小数，公式保留完整精度。未设计区间保持空白坡线。',

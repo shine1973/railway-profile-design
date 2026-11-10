@@ -42,3 +42,22 @@ test('公式导出含完整计算链、缓存、动态负值、版本迁移和�
   assert.match(chart,/计算过程/);assert.match(chart,/strRef/);assert.equal(sheet.autoFilter,undefined);
   const old={...p,version:2};delete old.curves;assert.deepEqual(validateProject(old).curves,{});
 });
+test('独立前后坡段延长线交点位于测点之间：仅显式连接、精确曲线范围和半径列',async()=>{
+ const p=curveFixture();p.controls={p0:200,p20:128,p70:70,p100:178};p.segments=[['p0','p20'],['p70','p100']];p.curves={};
+ assert.equal(calculate(p)[50].design,null);
+ const key='p0~p20~p70~p100';p.curves[key]=10000;
+ const rows=calculate(p),g=curveGeometry(p,rows);assert.deepEqual(g.issues,[]);assert.ok(Math.abs(g.curves[0].x-191)<1e-8);
+ assert.ok(Math.abs(g.curves[0].x/3.6-Math.round(g.curves[0].x/3.6))>.01);
+ assert.notEqual(rows[40].design,null);assert.equal(rows[40].radius,null);assert.equal(rows[53].radius,10000);assert.ok(Math.abs(rows[20].slope+1)<1e-10);
+ const book=new ExcelJS.Workbook();const bytes=await exportWorkbook(p,{formulas:true});await book.xlsx.load(bytes);
+ assert.equal(book.getWorksheet('测量数据').getCell('K55').result,10000);
+ const z=await JSZip.loadAsync(bytes);assert.match(await z.file('xl/charts/chart1.xml').async('string'),/竖曲线起点 1/);
+ assert.deepEqual(validateProject(JSON.parse(JSON.stringify(p))),p);
+ assert.ok(moveControl(p,'p20','p21'));assert.ok(p.curves['p0~p21~p70~p100']);
+ removeSegment(p,0);assert.deepEqual(p.curves,{});assert.equal(calculate(p)[50].design,null);
+});
+test('连续两处竖曲线不覆盖前一处已计算弧段，平行坡线拒绝导出',async()=>{
+ const p=curveFixture();p.controls={p0:180,p30:0,p60:180,p100:0};p.segments=[['p0','p30'],['p30','p60'],['p60','p100']];p.curves={p30:5000};const before=calculate(p);
+ p.curves.p60=5000;const after=calculate(p);assert.deepEqual(curveGeometry(p,after).issues,[]);for(const i of [29,30,31])assert.ok(Math.abs(before[i].design-after[i].design)<1e-9);
+ p.controls={p0:0,p30:0,p60:0,p100:0};await assert.rejects(exportWorkbook(p),/平行/);
+});

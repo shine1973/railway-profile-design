@@ -88,8 +88,14 @@ app.whenReady().then(async()=>{
  assert.equal(await js(`document.getElementById('export').disabled`),true);
  await js(`document.getElementById('undo').click();document.getElementById('lineType').value='到发线';document.getElementById('lineType').dispatchEvent(new Event('change'));`);
  assert.equal(await js(`document.querySelector('[data-radius="p20"]').value`),'500');
+ await js(`document.getElementById('clear').click();for(const id of ['p1','p10','p30','p45'])document.querySelector('[data-select="'+id+'"]').click();for(const [id,target] of [['p1',200],['p10',168],['p30',170],['p45',224]]){const measured=Number(document.querySelector('[data-row="'+id+'"]').children[7].textContent);const input=document.querySelector('[data-lift="'+id+'"]');input.value=target-measured;input.dispatchEvent(new Event('change'));}var pairRadius=document.querySelector('[data-radius="p1~p10~p30~p45"]');pairRadius.value='10000';pairRadius.dispatchEvent(new Event('change'));`);
+ assert.equal(await js(`document.getElementById('curveIssues').hidden`),true);
+ assert.match(await js(`document.getElementById('chart').textContent`),/竖曲线起点 1/);
+ assert.match(await js(`document.getElementById('chart').textContent`),/竖曲线终点 1/);
+ assert.equal(await js(`document.querySelector('[data-row="p20"]').children[12].textContent`),'10000');
  w.setSize(1440,960);await delay();
- await require('node:fs/promises').writeFile('/tmp/railway-v16-preview.png',(await w.webContents.capturePage()).toPNG());
+ await js(`document.getElementById('controls').scrollTop=document.getElementById('controls').scrollHeight`);
+ await require('node:fs/promises').writeFile('/tmp/railway-v17-preview.png',(await w.webContents.capturePage()).toPNG());
  console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal, shared endpoint selection highlight, stable layout at 1440/1000 widths, segment focus without data mutation, no horizontal overflow');
  app.exit(0);
  }catch(e){console.error(e);app.exit(1);}

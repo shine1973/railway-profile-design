@@ -29,10 +29,10 @@ export function parseRows(rows) {
   return points;
 }
 export function newProject(points = [], name = '未命名项目') {
-  return {format: 'railway-profile', version: 3, name, sleepers: 6, points, controls: {}, segments: [], pendingControl: null, curves: {}, lineType: '未指定', speed: null, speedBasis: '允许速度'};
+  return {format: 'railway-profile', version: 4, name, sleepers: 6, points, controls: {}, segments: [], pendingControl: null, curves: {}, lineType: '未指定', speed: null, speedBasis: '允许速度'};
 }
 export function validateProject(raw) {
-  if (!raw || raw.format !== 'railway-profile' || ![1,2,3].includes(raw.version)) throw new Error('不是受支持的线路拉坡项目（版本 1/2/3）');
+  if (!raw || raw.format !== 'railway-profile' || ![1,2,3,4].includes(raw.version)) throw new Error('不是受支持的线路拉坡项目（版本 1/2/3/4）');
   const sleepers = integer(raw.sleepers, '轨枕根数');
   if (sleepers < 1 || sleepers > 1000) throw new Error('轨枕根数应为 1 至 1000 的整数');
   if (!Array.isArray(raw.points) || raw.points.length > 10000) throw new Error('项目测点格式错误或超过 10000 点');
@@ -62,7 +62,7 @@ export function validateProject(raw) {
   if(!validSegments(project))throw new Error('坡段端点无效、重复或存在重叠');
   const used=new Set(project.segments.flat());if(project.pendingControl)used.add(project.pendingControl);
   if(Object.keys(controls).some(id=>!used.has(id)))throw new Error('控制点未关联坡段');
-  if(raw.version===3){
+  if(raw.version>=3){
     if(!raw.curves||typeof raw.curves!=='object'||Array.isArray(raw.curves))throw new Error('竖曲线参数无效');
     const eligible=new Set(junctions(project).map(j=>j.id));
     for(const [id,r] of Object.entries(raw.curves)){
@@ -81,7 +81,7 @@ export function calculate(project) {
   let hi = project.points[0]?.fore ?? 0;
   const result = project.points.map((p, i) => {
     const measured = hi - p.fore;
-    const r = {...p, index: i, distance: i * step, instrument: hi, measured, design: null, lift: null, slope: null, increment: null};
+    const r = {...p, index: i, distance: i * step, instrument: hi, measured, design: null, lift: null, slope: null, increment: null, radius: null};
     if (p.back !== null) hi = measured + p.back;
     return r;
   });
@@ -99,7 +99,11 @@ export function calculate(project) {
   }
   const geometry=curveGeometry(project,result);
   if(!geometry.issues.length)for(const c of geometry.curves)for(const r of result){
-    if(r.distance>=c.start&&r.distance<=c.end)r.design=curveHeight(c,r.distance);
+    if(r.distance>=c.from&&r.distance<=c.to){
+      if(r.design===null||(r.distance>=c.start&&r.distance<=c.end))r.design=r.distance<c.start?(c.y+c.m1*(r.distance-c.x))*1000:r.distance>c.end?(c.y+c.m2*(r.distance-c.x))*1000:curveHeight(c,r.distance);
+      if(r.distance<c.to)r.slope=0;
+    }
+    if(r.distance>=c.start&&r.distance<=c.end)r.radius=c.radius;
   }
   for(let i=0;i<result.length;i++){
     const r=result[i];
@@ -169,8 +173,7 @@ export function moveControl(project,fromId,toId){
   const next={...project,controls:{...project.controls,[toId]:project.controls[fromId]},segments:project.segments.map(s=>s.map(id=>id===fromId?toId:id)),pendingControl:project.pendingControl===fromId?toId:project.pendingControl};
   delete next.controls[fromId];
   if(!validSegments(next))return false;
-  next.curves={...project.curves};
-  if(Object.hasOwn(next.curves,fromId)){next.curves[toId]=next.curves[fromId];delete next.curves[fromId];}
+  next.curves=Object.fromEntries(Object.entries(project.curves??{}).map(([key,value])=>[key.split('~').map(id=>id===fromId?toId:id).join('~'),value]));
   pruneControls(next);
   Object.assign(project,next);return true;
 }
