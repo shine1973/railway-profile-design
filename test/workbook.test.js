@@ -46,7 +46,7 @@ test('填写模板：空白数据表、独立示例不误导入、填写转站�
   await assert.rejects(importWorkbook(buffer,'空模板'),/没有可导入的测点/);
   const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);
   const s=book.getWorksheet('测量数据');
-  assert.deepEqual(s.getRow(1).values.slice(1),['特征点','点号','前视读数','后视读数']);
+  assert.deepEqual(s.getRow(1).values.slice(1,12),['特征点','点号','前视读数','后视读数']);
   assert.ok(book.getWorksheet('填写说明'));
   for(let r=2;r<=s.rowCount;r++)for(let c=1;c<=4;c++)assert.equal(s.getCell(r,c).value,null);
   s.getRow(2).values=['起点',-2,1200,null];
@@ -61,7 +61,7 @@ test('导出十一列、原始数据、负值样式、真实可编辑散点图�
   const p=newProject(parseRows([['特征点','点号','前视读数','后视读数'],['<岔心>',0,1200,null],['',0,1220,null],['',2,1240,null],['',3,1250,null]]));
   p.controls={p3:-5,p4:0};p.segments=[['p3','p4']];const buffer=await exportWorkbook(p);
   const book=new ExcelJS.Workbook();await book.xlsx.load(buffer);const s=book.getWorksheet('测量数据');
-  assert.deepEqual(s.getRow(1).values.slice(1),['特征点','点号','前视读数','后视读数','仪器高','实测高程','设计高程','坡度','递增量','起道量','竖曲线半径（m）']);
+  assert.deepEqual(s.getRow(1).values.slice(1,12),['特征点','点号','前视读数','后视读数','仪器高','实测高程','设计高程','坡度','递增量','起道量','竖曲线半径（m）']);
   calculate(p).forEach((r,i)=>{assert.equal(s.getCell(i+2,5).value,r.instrument);assert.equal(s.getCell(i+2,6).value,r.measured);assert.ok(r.measured>=10);});
   assert.equal(s.autoFilter,undefined);assert.doesNotMatch(await (await JSZip.loadAsync(buffer)).file('xl/worksheets/sheet1.xml').async('string'),/<autoFilter/);
   assert.equal(s.getCell('G2').value,'未设计');assert.equal(s.getCell('J3').value,-5);assert.equal(s.getCell('J3').font.color.argb,'FFDC3545');assert.equal(s.getCell('H4').value,null);assert.equal(s.getCell('H3').numFmt,'0.0');assert.equal(s.getCell('A2').value,'<岔心>');

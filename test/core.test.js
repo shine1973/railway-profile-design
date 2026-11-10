@@ -20,7 +20,7 @@ test('独立两点配对，不继承上一段末点，支持反选、共享端�
 test('旧版项目显式迁移原有连续坡段，不改变旧设计；新版孤立控制点校验',()=>{
   const raw={...fixture(),version:1,controls:{p2:0,p3:5,p5:0}};delete raw.segments;delete raw.pendingControl;
   const migrated=validateProject(raw);
-  assert.equal(migrated.version,5);assert.deepEqual(migrated.segments,[['p2','p3'],['p3','p5']]);
+  assert.equal(migrated.version,6);assert.deepEqual(migrated.segments,[['p2','p3'],['p3','p5']]);
   assert.deepEqual(calculate(migrated),calculate(raw));
   assert.throws(()=>validateProject({...fixture(),controls:{p2:0}}),/未关联坡段/);
 });

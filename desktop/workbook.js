@@ -125,6 +125,10 @@ export async function exportWorkbook(rawProject, options = {}) {
   for (const r of rows) {
     sheet.addRow([r.feature,r.no,r.fore,r.back,r.instrument,r.measured,r.design ?? '未设计',r.slope,r.increment,r.lift ?? '未设计',r.radius]);
   }
+  sheet.getColumn('L').width=12;sheet.getColumn('M').width=16;sheet.getColumn('N').width=12;
+  sheet.getCell('L1').value='测量日期';sheet.getCell('M1').value=project.measurementDate||'未填写';
+  sheet.getCell('N1').value='测量地点';sheet.mergeCells('O1:AB1');sheet.getCell('O1').value=project.measurementLocation||'未填写';
+  sheet.getCell('O1').alignment={vertical:'middle',horizontal:'left',wrapText:true};
   const widths = [24,12,14,14,16,19,16,12,14,14,18];
   widths.forEach((w,i) => {sheet.getColumn(i+1).width=w; if(i>0) sheet.getColumn(i+1).numFmt = i===7||i===8 ? '0.0' : '0';});
   sheet.getRow(1).height=30;
@@ -137,6 +141,7 @@ export async function exportWorkbook(rawProject, options = {}) {
   const params = book.addWorksheet('参数');
   params.addRow(['累计距离（米）','记录序号','项目名称',project.name]);
   rows.forEach((r,i)=>{params.getCell(i+2,1).value=r.distance;params.getCell(i+2,2).value=i+1;});
+  params.getCell('V1').value='测量日期';params.getCell('W1').value=project.measurementDate||'未填写';params.getCell('V2').value='测量地点';params.getCell('W2').value=project.measurementLocation||'未填写';
   params.getCell('C2').value='轨枕根数';params.getCell('D2').value=project.sleepers;
   params.getCell('C3').value='测点间距（米）';params.getCell('D3').value=project.sleepers*0.6;
   params.getCell('C4').value='首点假定高程（mm）';params.getCell('D4').value=rows[0].datum;

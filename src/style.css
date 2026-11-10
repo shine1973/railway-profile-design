@@ -39,3 +39,5 @@ footer{display:flex;justify-content:space-between;color:var(--muted);font-size:1
 /* Design metadata and curve inputs share the existing quiet form treatment. */
 select{font:inherit;color:inherit;background:#fff;border:1px solid #dce5e9;border-radius:6px;padding:7px 9px;max-width:100%}
 #lineSpeed{width:78px}#curves{margin-top:20px}#curves input{width:100px}#curves small{display:block;color:#68808c;line-height:1.6;margin-top:8px}#curveIssues{padding:12px 18px;margin:12px 0;background:#fff0f2;border:1px solid #efc4cc;border-radius:8px}
+
+.measurement-location{flex:1;margin:0 24px}.measurement-location input{width:min(440px,70%)}.radius-suggestion{display:flex;align-items:center;gap:8px}.radius-suggestion button{font-size:11px;padding:4px 6px;white-space:nowrap}

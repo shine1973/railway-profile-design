@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import {newProject,calculate,validateProject,moveControl,removeSegment} from '../src/core.js';
-import {curveGeometry,curveHeight} from '../src/vertical-curves.js';
+import {curveGeometry,curveHeight,recommendRadius} from '../src/vertical-curves.js';
 import {exportWorkbook} from '../desktop/workbook.js';
 export function curveFixture(sign=1){
   const p=newProject(Array.from({length:101},(_,i)=>({id:`p${i}`,sourceRow:i+2,no:i-2,feature:i===50?'变坡点':'',fore:1000,back:null})));
@@ -60,4 +60,23 @@ test('连续两处竖曲线不覆盖前一处已计算弧段，平行坡线拒�
  const p=curveFixture();p.controls={p0:180,p30:0,p60:180,p100:0};p.segments=[['p0','p30'],['p30','p60'],['p60','p100']];p.curves={p30:5000};const before=calculate(p);
  p.curves.p60=5000;const after=calculate(p);assert.deepEqual(curveGeometry(p,after).issues,[]);for(const i of [29,30,31])assert.ok(Math.abs(before[i].design-after[i].design)<1e-9);
  p.controls={p0:0,p30:0,p60:0,p100:0};await assert.rejects(exportWorkbook(p),/平行/);
+});
+
+test('几何建议不依赖速度，采用后有效且避让相邻竖曲线，平行不给推荐',()=>{
+ const p=curveFixture();p.curves={};const rows=calculate(p),before=structuredClone(p),s=recommendRadius(p,rows,'p50');
+ assert.ok(s.radius>0&&s.radius<=s.maximum*.8+1e-8);assert.deepEqual(p,before);
+ p.speed=350;p.lineType='区间正线';assert.deepEqual(recommendRadius(p,rows,'p50'),s);
+ p.curves.p50=s.radius;assert.deepEqual(curveGeometry(p,calculate(p)).issues,[]);
+ p.controls={p0:180,p30:0,p60:180,p100:0};p.segments=[['p0','p30'],['p30','p60'],['p60','p100']];p.curves={};
+ const without=recommendRadius(p,calculate(p),'p60');p.curves.p30=recommendRadius(p,calculate(p),'p30').radius;
+ const withNeighbor=recommendRadius(p,calculate(p),'p60');assert.ok(withNeighbor.radius>0&&withNeighbor.maximum<=without.maximum);
+ p.curves.p60=withNeighbor.radius;assert.deepEqual(curveGeometry(p,calculate(p)).issues,[]);
+ p.controls={p0:0,p30:0,p60:0,p100:0};assert.match(recommendRadius(p,calculate(p),'p30').reason,/平行/);
+});
+test('测量日期地点保存往返、旧版迁移和两种Excel导出',async()=>{
+ const p=curveFixture();p.measurementDate='2026-11-10';p.measurementLocation='演示地点：测试线';
+ assert.deepEqual(validateProject(JSON.parse(JSON.stringify(p))),p);
+ assert.throws(()=>validateProject({...p,measurementDate:'2026-02-30'}),/日期/);
+ assert.equal(validateProject({...p,version:5}).measurementDate,'');
+ for(const formulas of [false,true]){const b=new ExcelJS.Workbook();await b.xlsx.load(await exportWorkbook(p,{formulas}));const s=b.getWorksheet('测量数据');assert.equal(s.getCell('M1').value,p.measurementDate);assert.equal(s.getCell('O1').value,p.measurementLocation);assert.equal(b.getWorksheet('参数').getCell('W2').value,p.measurementLocation);}
 });

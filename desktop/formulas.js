@@ -97,7 +97,7 @@ export function addFormulas(book,project,rows,model,options) {
     '竖曲线参数 P列为FALSE表示越界、重叠、半径无效或两坡相同；设计结果显示#N/A，请调整后再使用。此项仅为几何检查，不代表符合规范。',
     '图表沿用导出时的显示范围和刻度。修改输入后系列随公式更新；如超出坐标范围，请在Excel/WPS中调整坐标轴。',
     '高程和起道量显示整毫米；坡度和递增量显示一位小数，公式保留完整精度。未设计区间保持空白坡线。',
-    `线路类别：${project.lineType??'未指定'}；${project.speedBasis??'允许速度'}：${project.speed??'未指定'} km/h。推荐半径尚无已核实规则。`
+    `测量日期：${project.measurementDate||'未填写'}；测量地点：${project.measurementLocation||'未填写'}。半径几何建议不代表线路规范限值。`
   ].forEach(t=>{const row=guide.addRow([t]);row.height=40;row.alignment={wrapText:true,vertical:'middle'};});
   for(const c of ['D2',...[...controls.values()].map(i=>`D${i}`)])params.getCell(c).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE3F1FF'}};
   geometry.curves.forEach((c,k)=>{curves.getCell(`B${k+2}`).fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE3F1FF'}};});

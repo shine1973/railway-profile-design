@@ -86,7 +86,7 @@ app.whenReady().then(async()=>{
  await js(`document.getElementById('redo').click();var radius=document.querySelector('[data-radius="p20"]');radius.value='1000000';radius.dispatchEvent(new Event('change'));`);
  assert.equal(await js(`document.getElementById('curveIssues').hidden`),false);
  assert.equal(await js(`document.getElementById('export').disabled`),true);
- await js(`document.getElementById('undo').click();document.getElementById('lineType').value='到发线';document.getElementById('lineType').dispatchEvent(new Event('change'));`);
+ await js(`document.getElementById('undo').click();document.getElementById('measurementLocation').value='演示地点';document.getElementById('measurementLocation').dispatchEvent(new Event('change'));`);
  assert.equal(await js(`document.querySelector('[data-radius="p20"]').value`),'500');
  await js(`document.getElementById('clear').click();for(const id of ['p1','p10','p30','p45'])document.querySelector('[data-select="'+id+'"]').click();for(const [id,target] of [['p1',200],['p10',168],['p30',170],['p45',224]]){const measured=Number(document.querySelector('[data-row="'+id+'"]').children[7].textContent);const input=document.querySelector('[data-lift="'+id+'"]');input.value=target-measured;input.dispatchEvent(new Event('change'));}var pairRadius=document.querySelector('[data-radius="p1~p10~p30~p45"]');pairRadius.value='10000';pairRadius.dispatchEvent(new Event('change'));`);
  assert.equal(await js(`document.getElementById('curveIssues').hidden`),true);
@@ -121,6 +121,13 @@ app.whenReady().then(async()=>{
  assert.deepEqual(await snapshot(),beforeExtensionCancel);
  await js(`document.getElementById('controls').scrollTop=0;`);
  await require('node:fs/promises').writeFile('/tmp/railway-v18-preview.png',(await w.webContents.capturePage()).toPNG());
+ assert.equal(await js(`document.getElementById('lineType')===null&&document.getElementById('lineSpeed')===null`),true);
+ await js(`document.getElementById('measurementDate').value='2026-11-10';document.getElementById('measurementDate').dispatchEvent(new Event('change'));document.getElementById('measurementLocation').value='演示测量地点';document.getElementById('measurementLocation').dispatchEvent(new Event('change'));document.querySelector('[data-recommend]').click();`);
+ assert.equal(await js(`document.getElementById('curveIssues').hidden`),true);
+ assert.ok(Number(await js(`document.querySelector('[data-radius]').value`))>0);
+ assert.equal(await js(`document.getElementById('measurementDate').value`),'2026-11-10');
+ await js(`document.getElementById('controls').scrollTop=document.getElementById('controls').scrollHeight`);
+ await require('node:fs/promises').writeFile('/tmp/railway-v20-preview.png',(await w.webContents.capturePage()).toPNG());
  console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal, shared endpoint selection highlight, stable layout at 1440/1000 widths, segment focus without data mutation, no horizontal overflow');
  app.exit(0);
  }catch(e){console.error(e);app.exit(1);}

@@ -29,10 +29,10 @@ export function parseRows(rows) {
   return points;
 }
 export function newProject(points = [], name = '未命名项目') {
-  return {format: 'railway-profile', version: 5, name, sleepers: 6, points, controls: {}, segments: [], pendingControl: null, curves: {}, lineType: '未指定', speed: null, speedBasis: '允许速度'};
+  return {format: 'railway-profile', version: 6, name, sleepers: 6, points, controls: {}, segments: [], pendingControl: null, curves: {}, lineType: '未指定', speed: null, speedBasis: '允许速度', measurementDate: '', measurementLocation: ''};
 }
 export function validateProject(raw) {
-  if (!raw || raw.format !== 'railway-profile' || ![1,2,3,4,5].includes(raw.version)) throw new Error('不是受支持的线路拉坡项目（版本 1/2/3/4/5）');
+  if (!raw || raw.format !== 'railway-profile' || ![1,2,3,4,5,6].includes(raw.version)) throw new Error('不是受支持的线路拉坡项目（版本 1/2/3/4/5/6）');
   const sleepers = integer(raw.sleepers, '轨枕根数');
   if (sleepers < 1 || sleepers > 1000) throw new Error('轨枕根数应为 1 至 1000 的整数');
   if (!Array.isArray(raw.points) || raw.points.length > 10000) throw new Error('项目测点格式错误或超过 10000 点');
@@ -73,6 +73,12 @@ export function validateProject(raw) {
     if(raw.speed!==null&&(!Number.isFinite(raw.speed)||raw.speed<=0||raw.speed>500))throw new Error('速度须在0至500 km/h之间');
     if(!['允许速度','设计速度'].includes(raw.speedBasis))throw new Error('速度依据无效');
     Object.assign(project,{lineType:raw.lineType,speed:raw.speed,speedBasis:raw.speedBasis});
+  }
+  if(raw.version>=6){
+    const date=raw.measurementDate,location=raw.measurementLocation;
+    if(typeof date!=='string'||(date!==''&&(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)))throw new Error('测量日期无效');
+    if(typeof location!=='string'||location.length>500)throw new Error('测量地点应为500字以内');
+    project.measurementDate=date;project.measurementLocation=location;
   }
   return project;
 }

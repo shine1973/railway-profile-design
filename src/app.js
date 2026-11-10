@@ -1,4 +1,4 @@
-import {junctions,curveGeometry,curveHeight} from './vertical-curves.js';
+import {junctions,curveGeometry,curveHeight,recommendRadius} from './vertical-curves.js';
 import {newProject,calculate,integer,format,History,moveControl,extendControl,extensionStart,pickEndpoint,removeControl,removeSegment,cancelPending} from './core.js';
 import {fullView,clampView,zoomView,chartModel} from './chart-view.js';
 import {layoutLabels} from './chart-labels.js';
@@ -47,16 +47,16 @@ $('fit').onclick=()=>{view=null;drawChart();};
 document.addEventListener('keydown',e=>{if(pan){if(e.key!=='Escape')e.preventDefault();return;}if((e.metaKey||e.ctrlKey)&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){if(e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?history.redo():history.undo();render();}if(e.key.toLowerCase()==='s'){e.preventDefault();$('save').click();}}});
 function toggle(id){try{mutate(p=>pickEndpoint(p,id));status(project().pendingControl?'已选第一个端点，请选择本段另一个端点':'坡段已完成，请重新选择下一段的两个端点');}catch(e){message(e.message);}}
 
-['lineType','speedBasis'].forEach(id=>$(id).onchange=e=>mutate(p=>p[id]=e.target.value));
-$('lineSpeed').onchange=e=>{const value=e.target.value===''?null:Number(e.target.value);if(value!==null&&(!Number.isFinite(value)||value<=0||value>500)){message('速度须大于0且不超过500 km/h');render();return;}mutate(p=>p.speed=value);};
+['measurementDate','measurementLocation'].forEach(id=>$(id).onchange=e=>{if(!e.target.checkValidity()){message('请填写有效的测量日期或地点');render();return;}mutate(p=>p[id]=e.target.value.trim());});
 function render(){
   const curvesPanel=$('curves');
   results=calculate(project());
-  $('lineType').value=project().lineType??'未指定';$('speedBasis').value=project().speedBasis??'允许速度';$('lineSpeed').value=project().speed??'';
+  $('measurementDate').value=project().measurementDate??'';$('measurementLocation').value=project().measurementLocation??'';
   const cg=curveGeometry(project(),results);
   $('curveIssues').hidden=!cg.issues.length;
   $('curveIssues').textContent=cg.issues.length?'竖曲线未应用（暂显示直坡，禁止导出）：'+cg.issues.join('；'):'';
-  $('curves').innerHTML='<h3 class="paneltitle">竖曲线 <span>圆曲线</span></h3><p class="hint">选择前后坡段组合并填写半径启用，留空关闭。交点由两坡延长线计算，可位于测点之间。半径单位 m。暂无已核实的规范推荐值。<br>端点起道设置确定两条直坡线；最终起道量见表格。</p>'+junctions(project()).map(j=>{const c=cg.curves.find(c=>c.id===j.id);return `<div class="controlitem"><label>坡段 ${j.leftIndex+1} → ${j.rightIndex+1} · R <input data-radius="${j.id}" aria-label="坡段 ${j.leftIndex+1} 到 ${j.rightIndex+1} 竖曲线半径" type="number" min="0.001" max="10000000" step="any" placeholder="未设置" value="${project().curves?.[j.id]??''}"> m</label>${c?`<small>交点距 ${c.x.toFixed(2)} m · 交点高程 ${(c.y*1000).toFixed(1)} mm<br>起点距 ${c.start.toFixed(2)} m · 终点距 ${c.end.toFixed(2)} m<br>弧长 ${c.length.toFixed(2)} m · ${c.sign>0?'凹形':'凸形'}</small>`:''}</div>`;}).join('');
+  $('curves').innerHTML='<h3 class="paneltitle">竖曲线 <span>圆曲线</span></h3><p class="hint">选择前后坡段组合并填写半径启用，留空关闭。交点由两坡延长线计算，可位于测点之间。半径单位 m。建议按可用空间的80%向下取两位有效数字，不按速度分级。请自行核对线路半径要求。<br>端点起道设置确定两条直坡线；最终起道量见表格。</p>'+junctions(project()).map(j=>{const c=cg.curves.find(c=>c.id===j.id),suggestion=recommendRadius(project(),results,j.id);return `<div class="controlitem"><label>坡段 ${j.leftIndex+1} → ${j.rightIndex+1} · R <input data-radius="${j.id}" aria-label="坡段 ${j.leftIndex+1} 到 ${j.rightIndex+1} 竖曲线半径" type="number" min="0.001" max="10000000" step="any" placeholder="未设置" value="${project().curves?.[j.id]??''}"> m</label><div class="radius-suggestion">${suggestion.radius?`<small>几何建议 ${suggestion.radius} m · 上限约 ${Math.floor(suggestion.maximum)} m</small><button data-recommend="${j.id}">采用建议</button>`:`<small>${suggestion.reason}</small>`}</div>${c?`<small>交点距 ${c.x.toFixed(2)} m · 交点高程 ${(c.y*1000).toFixed(1)} mm<br>起点距 ${c.start.toFixed(2)} m · 终点距 ${c.end.toFixed(2)} m<br>弧长 ${c.length.toFixed(2)} m · ${c.sign>0?'凹形':'凸形'}</small>`:''}</div>`;}).join('');
+  document.querySelectorAll('[data-recommend]').forEach(button=>button.onclick=()=>{const s=recommendRadius(project(),results,button.dataset.recommend);if(s.radius)mutate(p=>p.curves[button.dataset.recommend]=s.radius);});
   document.querySelectorAll('[data-radius]').forEach(input=>input.onchange=()=>{const value=input.value===''?null:Number(input.value);if(value!==null&&(!Number.isFinite(value)||value<=0||value>10000000)){invalid(input,'半径须大于0且不超过10000000 m');return;}mutate(p=>{p.curves??={};if(value===null)delete p.curves[input.dataset.radius];else p.curves[input.dataset.radius]=value;});});
   $('projectName').value=project().name;$('sleepers').value=project().sleepers;$('spacing').textContent=(project().sleepers*.6).toFixed(1)+' m';
   const selected=Object.keys(project().controls), designed=results.filter(r=>r.design!==null), negative=designed.filter(r=>r.lift<0);
