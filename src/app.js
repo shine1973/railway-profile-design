@@ -57,8 +57,10 @@ function render(){
   $('save').disabled=busy||!results.length;$('export').disabled=busy||!results.length;$('import').disabled=busy;$('open').disabled=busy;$('template').disabled=busy;
   $('undo').disabled=!history.past.length;$('redo').disabled=!history.future.length;$('clear').disabled=!selected.length;
   $('empty').hidden=results.length>0;
-  $('controls').innerHTML=results.filter(r=>selected.includes(r.id)).map(r=>`<div class="controlitem"><div class="top"><span>点号 ${r.no}${r.no!==r.index+1?` <small> / 序号 ${r.index+1}</small>`:''}</span><button data-remove="${r.id}" aria-label="取消控制点 ${r.no}">×</button></div><label>起道量 <input type="text" inputmode="numeric" aria-label="控制点 ${r.no} 起道量" data-lift="${r.id}" value="${project().controls[r.id]}" class="${project().controls[r.id]<0?'negative':''}"> mm</label></div>`).join('') || '<p class="hint">尚未选择控制点。<br>每次选择两个端点生成独立坡段。</p>';
+  $('controls').innerHTML=results.filter(r=>selected.includes(r.id)).map(r=>`<div class="controlitem ${r.id===project().pendingControl?'pendingcontrol':''}"><div class="top"><span>点号 ${r.no}${r.no!==r.index+1?` <small> / 序号 ${r.index+1}</small>`:''}</span><button data-remove="${r.id}" aria-label="取消控制点 ${r.no}">×</button></div><label>起道量 <input type="text" inputmode="numeric" aria-label="控制点 ${r.no} 起道量" data-lift="${r.id}" value="${project().controls[r.id]}" class="${project().controls[r.id]<0?'negative':''}"> mm</label></div>`).join('') || '<p class="hint">尚未选择控制点。<br>每次选择两个端点生成独立坡段。</p>';
   const pending=results.find(r=>r.id===project().pendingControl);
+  $('selectionHint').hidden=!pending;
+  $('selectionHint').textContent=pending?`● 已选新坡段起点：现场点号 ${pending.no} · 记录序号 ${pending.index+1}。请选择另一个端点；再次点击此点可取消。`:'';
   const segmentRows=project().segments.map(([a,b],i)=>{const start=results.find(r=>r.id===a),end=results.find(r=>r.id===b);return `<div class="segmentitem">坡段 ${i+1} · 序号 ${start.index+1} ↔ ${end.index+1}<button data-segment="${i}" aria-label="删除坡段 ${i+1}">删除</button></div>`;}).join('');
   $('controls').insertAdjacentHTML('afterbegin',`<div class="segmenthint">${pending?`已选序号 ${pending.index+1}，请选另一端 <button id="cancelPending">取消</button>`:'每次重新选两个端点，独立生成一段'}</div>${segmentRows}`);
   if($('cancelPending'))$('cancelPending').onclick=()=>mutate(cancelPending);
@@ -69,7 +71,7 @@ function render(){
     input.onchange=()=>{try{const value=integer(input.value,'起道量');mutate(p=>p.controls[input.dataset.lift]=value);}catch(e){invalid(input,e.message);}};
     input.onkeydown=e=>{if(e.key==='Enter'){input.blur();}if(e.key==='Escape'){input.value=project().controls[input.dataset.lift];clearInvalid(input);input.blur();}};
   });
-  $('rows').innerHTML=results.map(r=>`<tr data-row="${r.id}" class="${selected.includes(r.id)?'controlrow':''}"><td><input type="checkbox" aria-label="选择第 ${r.index+1} 个测点" data-select="${r.id}" ${selected.includes(r.id)?'checked':''}></td><td>${r.index+1}</td>${['feature','no','fore','back'].map(k=>`<td class="editable" tabindex="0" data-id="${r.id}" data-key="${k}">${escape(r[k])}</td>`).join('')}<td>${format(r.instrument)}</td><td>${format(r.measured)}</td><td class="${r.design===null?'undesign':''}">${format(r.design)}</td><td>${format(r.slope,1,'')}</td><td>${format(r.increment,1,'')}</td><td class="${r.lift===null?'undesign':r.lift<0?'negative':''}">${format(r.lift)}</td></tr>`).join('');
+  $('rows').innerHTML=results.map(r=>`<tr data-row="${r.id}" class="${selected.includes(r.id)?'controlrow':''} ${r.id===project().pendingControl?'pendingrow':''}"><td><input type="checkbox" aria-label="选择第 ${r.index+1} 个测点" data-select="${r.id}" ${selected.includes(r.id)?'checked':''}></td><td>${r.index+1}</td>${['feature','no','fore','back'].map(k=>`<td class="editable" tabindex="0" data-id="${r.id}" data-key="${k}">${escape(r[k])}</td>`).join('')}<td>${format(r.instrument)}</td><td>${format(r.measured)}</td><td class="${r.design===null?'undesign':''}">${format(r.design)}</td><td>${format(r.slope,1,'')}</td><td>${format(r.increment,1,'')}</td><td class="${r.lift===null?'undesign':r.lift<0?'negative':''}">${format(r.lift)}</td></tr>`).join('');
   document.querySelectorAll('[data-select]').forEach(i=>i.onclick=e=>{e.preventDefault();toggle(i.dataset.select);});
   document.querySelectorAll('td.editable').forEach(td=>{td.onclick=()=>edit(td);td.onkeydown=e=>{if(e.key==='Enter')edit(td);};});
   drawChart();
@@ -122,7 +124,12 @@ function drawChart(){
   for(const r of visible){
     const selected=Object.hasOwn(project().controls,r.id),negative=r.lift!==null&&r.lift<0;
     group.append(node('circle',{cx:x(r.index+1),cy:y(r.measured),r:3,fill:negative?'#d4374f':'#fff',stroke:negative?'#d4374f':'#27899a','stroke-width':1.3}));
-    if(selected){const cy=y(r.measured+project().controls[r.id]);group.append(node('line',{x1:x(r.index+1),y1:y(r.measured),x2:x(r.index+1),y2:cy,stroke:'#dca855','stroke-dasharray':'3 3'}));group.append(node('circle',{cx:x(r.index+1),cy,r:6,fill:'#fff7e9',stroke:'#d99432','stroke-width':2.2}));}
+    if(selected){
+      const cy=y(r.measured+project().controls[r.id]),pending=r.id===project().pendingControl;
+      group.append(node('line',{x1:x(r.index+1),y1:y(r.measured),x2:x(r.index+1),y2:cy,stroke:pending?'#2563eb':'#dca855','stroke-dasharray':'3 3'}));
+      if(pending)group.append(node('circle',{cx:x(r.index+1),cy,r:11,fill:'none',stroke:'#2563eb','stroke-width':2,'data-pending':r.id,'pointer-events':'none'}));
+      group.append(node('circle',{cx:x(r.index+1),cy,r:6,fill:pending?'#2563eb':'#fff7e9',stroke:pending?'#fff':'#d99432','stroke-width':2.2,'aria-label':pending?'已选新坡段起点，请选择另一端':'控制点'}));
+    }
 
   }
   const annotations=node('g',{'pointer-events':'none'});svg.append(annotations);

@@ -47,7 +47,20 @@ app.whenReady().then(async()=>{
  assert.deepEqual(await selected(),['p1','p2','p10','p15']);
  await js(`document.querySelector('[data-select="p8"]').click();document.getElementById('cancelPending').click()`);
  assert.deepEqual(await selected(),['p1','p2','p10','p15']);
- console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal');
+ await js(`document.querySelector('[data-select="p2"]').click()`);
+ assert.equal(await js(`document.querySelector('#chart [data-pending]').getAttribute('data-pending')`),'p2');
+ assert.equal(await js(`document.getElementById('selectionHint').hidden`),false);
+ assert.match(await js(`document.getElementById('selectionHint').textContent`),/记录序号 2/);
+ assert.equal(await js(`document.querySelector('[data-row="p2"]').classList.contains('pendingrow')`),true);
+ assert.equal(await js(`document.querySelector('[data-lift="p2"]').closest('.controlitem').classList.contains('pendingcontrol')`),true);
+ await js(`document.getElementById('cancelPending').click()`);
+ assert.equal(await js(`document.querySelector('#chart [data-pending]')===null`),true);
+ assert.deepEqual(await selected(),['p1','p2','p10','p15']);
+ await js(`document.querySelector('[data-select="p2"]').click();document.querySelector('[data-select="p4"]').click()`);
+ assert.equal(await js(`document.querySelector('#chart [data-pending]')===null`),true);
+ assert.equal(await js(`document.getElementById('selectionHint').hidden`),true);
+ assert.equal(await js(`document.querySelectorAll('[data-segment]').length`),3);
+ console.log('PASS: forward/backward drag, retained lift, undo/redo, occupied target, Escape cancellation, independent pairs, adjacent gaps, segment removal, shared endpoint selection highlight');
  app.exit(0);
  }catch(e){console.error(e);app.exit(1);}
 });
